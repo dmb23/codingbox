@@ -1,0 +1,293 @@
+# Sandboxed coding environment launcher
+# Uses Docker Sandboxes (microVM-based isolation)
+# =============================================================================
+
+DOCKER="/Applications/Docker.app/Contents/Resources/bin/docker"
+SANDBOX_NAME="${SANDBOX_NAME:-codingbox}"
+AGENT="${SANDBOX_AGENT:-claude}"
+=======
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =============================================================================
+# Sandboxed coding environment launcher
+# Uses Docker Sandboxes (microVM-based isolation)
+# =============================================================================
+
+DOCKER="/Applications/Docker.app/Contents/Resources/bin/docker"
+SANDBOX_NAME="${SANDBOX_NAME:-}"
+AGENT="${SANDBOX_AGENT:-claude}"
+
+# Set default sandbox name to current directory name if not specified
+if [[ -z "$SANDBOX_NAME" ]]; then
+  SANDBOX_NAME="${PWD##*/}"
+fi=============================================================================
+# Sandboxed coding environment launcher
+# Uses Docker Sandboxes (microVM-based isolation)
+# =============================================================================
+
+DOCKER="/Applications/Docker.app/Contents/Resources/bin/docker"
+SANDBOX_NAME="${SANDBOX_NAME:-codingbox}"
+AGENT="${SANDBOX_AGENT:-claude}"
+
+# --- Network whitelist ---
+# Deny by default. These domains are allowed through the MITM proxy.
+# Extend at runtime with: ./sandbox allow-host docs.rs
+ALLOWED_HOSTS=(
+  # AI APIs
+  "api.anthropic.com"
+  "statsig.anthropic.com"
+  "sentry.io"
+  # GitHub
+  "github.com"
+  "*.github.com"
+  "*.githubusercontent.com"
+  # npm
+  "registry.npmjs.org"
+  "*.npmjs.org"
+  "*.npmjs.com"
+  # PyPI
+  "pypi.org"
+  "files.pythonhosted.org"
+  # Rust
+  "crates.io"
+  "index.crates.io"
+  "static.crates.io"
+  # Go
+  "proxy.golang.org"
+  "sum.golang.org"
+  # Docker
+  "*.docker.io"
+  "*.docker.com"
+  "ghcr.io"
+  # OS packages
+  "*.ubuntu.com"
+  "*.debian.org"
+  "deb.nodesource.com"
+)
+
+# --- Git config to copy into sandbox ---
+# We selectively copy safe settings from host gitconfig.
+# SSH URL rewrites and conditional includes are excluded (sandbox uses HTTPS
+# via Docker's credential helper).
+setup_git_config() {
+  local sandbox="$1"
+
+  # Copy user identity (required for commits)
+  local name email
+  name="$(git config --global user.name 2>/dev/null || true)"
+  email="$(git config --global user.email 2>/dev/null || true)"
+
+  if [[ -n "$name" ]]; then
+    $DOCKER sandbox exec "$sandbox" git config --global user.name "$name"
+  fi
+  if [[ -n "$email" ]]; then
+    $DOCKER sandbox exec "$sandbox" git config --global user.email "$email"
+  fi
+
+  # Copy aliases
+  git config --global --get-regexp '^alias\.' 2>/dev/null | while read -r key value; do
+    $DOCKER sandbox exec "$sandbox" git config --global "$key" "$value"
+  done
+
+  # Copy LFS config if present
+  if git config --global --get filter.lfs.smudge &>/dev/null; then
+    $DOCKER sandbox exec "$sandbox" git config --global filter.lfs.smudge "git-lfs smudge -- %f"
+    $DOCKER sandbox exec "$sandbox" git config --global filter.lfs.process "git-lfs filter-process"
+    $DOCKER sandbox exec "$sandbox" git config --global filter.lfs.required true
+    $DOCKER sandbox exec "$sandbox" git config --global filter.lfs.clean "git-lfs clean -- %f"
+  fi
+
+  # Copy core settings
+  local autocrlf
+  autocrlf="$(git config --global core.autocrlf 2>/dev/null || true)"
+  if [[ -n "$autocrlf" ]]; then
+    $DOCKER sandbox exec "$sandbox" git config --global core.autocrlf "$autocrlf"
+  fi
+}
+
+# --- Commands ---
+
+cmd_create() {
+  local workspace="${1:-.}"
+  workspace="$(cd "$workspace" && pwd)"
+
+  echo "Creating sandbox '$SANDBOX_NAME' for $AGENT..."
+  echo "  Workspace: $workspace"
+  $DOCKER sandbox create --name "$SANDBOX_NAME" "$AGENT" "$workspace"
+
+  echo ""
+  echo "Configuring network policy (deny by default)..."
+  local args=("$SANDBOX_NAME" "--policy" "deny")
+  for host in "${ALLOWED_HOSTS[@]}"; do
+    args+=("--allow-host" "$host")
+  done
+  $DOCKER sandbox network proxy "${args[@]}"
+
+  echo ""
+  echo "Setting up git config..."
+  setup_git_config "$SANDBOX_NAME"
+
+  echo ""
+  echo "Sandbox ready. Run with: ./sandbox run"
+}
+
+cmd_run() {
+  shift_args=("$@")
+  echo "Starting $AGENT in sandbox '$SANDBOX_NAME'..."
+  if [[ ${#shift_args[@]} -gt 0 ]]; then
+    $DOCKER sandbox run "$SANDBOX_NAME" -- "${shift_args[@]}"
+  else
+    $DOCKER sandbox run "$SANDBOX_NAME"
+  fi
+}
+
+cmd_exec() {
+  if [[ $# -eq 0 ]]; then
+    $DOCKER sandbox exec -it "$SANDBOX_NAME" bash
+  else
+    $DOCKER sandbox exec "$SANDBOX_NAME" "$@"
+  fi
+}
+
+cmd_allow_host() {
+  local host="${1:?Usage: sandbox allow-host <domain>}"
+  echo "Adding $host to whitelist..."
+  $DOCKER sandbox network proxy "$SANDBOX_NAME" --allow-host "$host"
+  echo "Allowed: $host"
+}
+
+cmd_block_host() {
+  local host="${1:?Usage: sandbox block-host <domain>}"
+  echo "Blocking $host..."
+  $DOCKER sandbox network proxy "$SANDBOX_NAME" --block-host "$host"
+  echo "Blocked: $host"
+}
+
+cmd_logs() {
+  $DOCKER sandbox network log "$SANDBOX_NAME" --json "${@}"
+}
+
+cmd_logs_blocked() {
+  $DOCKER sandbox network log "$SANDBOX_NAME" --json "$@" \
+    | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for h in data.get('blocked_hosts', []):
+    print(f\"BLOCKED  {h['host']:40s}  count={h['count_since']}  last={h['last_seen']}\")
+"
+}
+
+cmd_logs_allowed() {
+  $DOCKER sandbox network log "$SANDBOX_NAME" --json "$@" \
+    | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for h in data.get('allowed_hosts', []):
+    print(f\"ALLOWED  {h['host']:40s}  rule={h['rule']:30s}  count={h['count_since']}\")
+"
+}
+
+cmd_watch() {
+  echo "Watching for blocked network requests..."
+  echo "Press Ctrl+C to stop. Use './sandbox allow-host <domain>' in another terminal to approve."
+  echo ""
+  local seen=""
+  while true; do
+    local blocked
+    blocked=$($DOCKER sandbox network log "$SANDBOX_NAME" --json 2>/dev/null \
+      | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for h in data.get('blocked_hosts', []):
+    print(h['host'])
+" 2>/dev/null || true)
+    while IFS= read -r host; do
+      if [[ -n "$host" ]] && [[ "$seen" != *"$host"* ]]; then
+        seen="$seen $host"
+        printf "\033[31mBLOCKED\033[0m  %s  -->  ./sandbox allow-host %s\n" "$host" "${host%%:*}"
+      fi
+    done <<< "$blocked"
+    sleep 2
+  done
+}
+
+cmd_stop() {
+  echo "Stopping sandbox '$SANDBOX_NAME'..."
+  $DOCKER sandbox stop "$SANDBOX_NAME"
+}
+
+cmd_rm() {
+  echo "Removing sandbox '$SANDBOX_NAME'..."
+  $DOCKER sandbox rm "$SANDBOX_NAME"
+}
+
+cmd_status() {
+  echo "=== Sandbox: $SANDBOX_NAME ==="
+  echo ""
+  $DOCKER sandbox ls 2>&1
+  echo ""
+  echo "=== Network Policy ==="
+  cat ~/.docker/sandboxes/vm/"$SANDBOX_NAME"/proxy-config.json 2>/dev/null \
+    | python3 -c "
+import sys, json
+c = json.load(sys.stdin)
+print(f\"  Default policy: {c['policy']['default']}\")
+print(f\"  Allowed domains: {len(c['network']['allowedDomains'])}\")
+for d in sorted(c['network']['allowedDomains']):
+    print(f'    {d}')
+print(f\"  Blocked domains: {len(c['network']['blockedDomains'])}\")
+for d in c['network']['blockedDomains']:
+    print(f'    {d}')
+print(f\"  Blocked CIDRs: {len(c['network']['blockedCIDRs'])}\")
+for d in c['network']['blockedCIDRs']:
+    print(f'    {d}')
+" 2>/dev/null || echo "  (sandbox not found)"
+}
+
+# --- Main ---
+
+usage() {
+  cat <<EOF
+Usage: ./sandbox <command> [args...]
+
+Sandbox lifecycle:
+  create [workspace]    Create sandbox with network policy & git config
+  run [-- agent-args]   Start the coding agent in the sandbox
+  exec [command...]     Run a command in the sandbox (default: interactive bash)
+  stop                  Stop the sandbox
+  rm                    Remove the sandbox
+
+Network management:
+  allow-host <domain>   Add a domain to the whitelist
+  block-host <domain>   Block a domain
+  logs [--limit N]      Show raw network logs (JSON)
+  logs-blocked          Show blocked hosts summary
+  logs-allowed          Show allowed hosts summary
+  watch                 Watch for blocked requests in real-time
+
+Info:
+  status                Show sandbox and network policy details
+
+Environment variables:
+  SANDBOX_NAME          Sandbox name (default: codingbox)
+  SANDBOX_AGENT         Agent type: claude, codex, gemini, ... (default: claude)
+EOF
+}
+
+case "${1:-help}" in
+  create)       shift; cmd_create "$@" ;;
+  run)          shift; cmd_run "$@" ;;
+  exec)         shift; cmd_exec "$@" ;;
+  allow-host)   shift; cmd_allow_host "$@" ;;
+  block-host)   shift; cmd_block_host "$@" ;;
+  logs)         shift; cmd_logs "$@" ;;
+  logs-blocked) shift; cmd_logs_blocked "$@" ;;
+  logs-allowed) shift; cmd_logs_allowed "$@" ;;
+  watch)        shift; cmd_watch "$@" ;;
+  stop)         shift; cmd_stop "$@" ;;
+  rm)           shift; cmd_rm "$@" ;;
+  status)       shift; cmd_status "$@" ;;
+  help|--help|-h) usage ;;
+  *)            echo "Unknown command: $1"; usage; exit 1 ;;
+esac
