@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,9 +27,11 @@ type SessionOrchestrator struct {
 
 	// Active session state
 	session      *models.SandboxSession
+	vmName       string
 	proxyServer  *proxy.Server
 	container    *ContainerManager
 	interceptor  *proxy.Interceptor
+	stopOnce     sync.Once
 }
 
 // NewSessionOrchestrator creates a new orchestrator.
@@ -87,6 +90,7 @@ func (o *SessionOrchestrator) Start(ctx context.Context, cfg *models.SandboxConf
 
 	session.VMID = vm.VMID
 	session.VMSocketPath = vm.SocketPath
+	o.vmName = vm.Name
 
 	// 2. Persist session
 	if err := o.sessionStore.Create(session); err != nil {
@@ -160,53 +164,53 @@ func (o *SessionOrchestrator) Start(ctx context.Context, cfg *models.SandboxConf
 	return session, nil
 }
 
-// Stop gracefully shuts down a sandbox session.
+// Stop gracefully shuts down a sandbox session. Safe to call multiple times.
 func (o *SessionOrchestrator) Stop(ctx context.Context, force bool) error {
 	if o.session == nil {
 		return fmt.Errorf("no active session")
 	}
 
-	o.logger.Info("stopping sandbox session", "session_id", o.session.ID)
+	var stopErr error
+	o.stopOnce.Do(func() {
+		o.logger.Info("stopping sandbox session", "session_id", o.session.ID)
 
-	// Stop container
-	if o.container != nil {
-		if err := o.container.Stop(ctx, force); err != nil {
-			o.logger.Error("failed to stop container", "error", err)
+		// Stop container
+		if o.container != nil {
+			if err := o.container.Stop(ctx, force); err != nil {
+				o.logger.Error("failed to stop container", "error", err)
+			}
 		}
-	}
 
-	// Stop proxy
-	if o.proxyServer != nil {
-		if err := o.proxyServer.Shutdown(ctx); err != nil {
-			o.logger.Error("failed to stop proxy", "error", err)
+		// Stop proxy
+		if o.proxyServer != nil {
+			if err := o.proxyServer.Shutdown(ctx); err != nil {
+				o.logger.Error("failed to stop proxy", "error", err)
+			}
 		}
-	}
 
-	// Destroy VM
-	if o.session.VMID != "" {
-		// Use the config snapshot to get the VM name
-		var cfg models.SandboxConfig
-		if err := json.Unmarshal([]byte(o.session.ConfigSnapshot), &cfg); err == nil {
-			if err := o.vmClient.DestroyVM(ctx, cfg.Name); err != nil {
+		// Destroy VM using the name returned by sandboxd
+		if o.vmName != "" {
+			if err := o.vmClient.DestroyVM(ctx, o.vmName); err != nil {
 				o.logger.Error("failed to destroy VM", "error", err)
 			}
 		}
-	}
 
-	// Update session status
-	if err := o.sessionStore.UpdateStatus(o.session.ID, models.StatusStopped, ""); err != nil {
-		o.logger.Error("failed to update session status", "error", err)
-	}
+		// Update session status
+		if err := o.sessionStore.UpdateStatus(o.session.ID, models.StatusStopped, ""); err != nil {
+			o.logger.Error("failed to update session status", "error", err)
+			stopErr = err
+		}
+	})
 
-	return nil
+	return stopErr
 }
 
-// StreamLogs streams container output to the given writer.
-func (o *SessionOrchestrator) StreamLogs(ctx context.Context) error {
+// Exec starts an interactive shell inside the sandbox container.
+func (o *SessionOrchestrator) Exec(ctx context.Context) error {
 	if o.container == nil {
 		return fmt.Errorf("no active container")
 	}
-	return o.container.StreamLogs(ctx)
+	return o.container.Exec(ctx)
 }
 
 // Session returns the current session.

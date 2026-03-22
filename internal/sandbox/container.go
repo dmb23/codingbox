@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -139,18 +140,20 @@ func (cm *ContainerManager) Stop(ctx context.Context, force bool) error {
 	return nil
 }
 
-// StreamLogs streams container stdout/stderr to os.Stdout/os.Stderr.
-func (cm *ContainerManager) StreamLogs(ctx context.Context) error {
+// Exec starts an interactive shell inside the running container.
+func (cm *ContainerManager) Exec(ctx context.Context) error {
 	if cm.containerID == "" {
 		return fmt.Errorf("no container running")
 	}
 
 	args := []string{
 		"--host", "unix://" + cm.vmSocketPath,
-		"logs", "-f", cm.containerID,
+		"exec", "-it", cm.containerID,
+		"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi",
 	}
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -173,6 +176,10 @@ func (cm *ContainerManager) loadImage(ctx context.Context, image string) error {
 	saveCmd := exec.CommandContext(ctx, "docker", "save", image)
 	loadCmd := exec.CommandContext(ctx, "docker", "--host", "unix://"+cm.vmSocketPath, "load")
 
+	var saveBuf, loadBuf bytes.Buffer
+	saveCmd.Stderr = &saveBuf
+	loadCmd.Stderr = &loadBuf
+
 	pr, pw := io.Pipe()
 	saveCmd.Stdout = pw
 	loadCmd.Stdin = pr
@@ -184,13 +191,19 @@ func (cm *ContainerManager) loadImage(ctx context.Context, image string) error {
 		return fmt.Errorf("starting docker load: %w", err)
 	}
 
+	saveErr := make(chan error, 1)
 	go func() {
-		saveCmd.Wait()
+		saveErr <- saveCmd.Wait()
 		pw.Close()
 	}()
 
 	if err := loadCmd.Wait(); err != nil {
-		return fmt.Errorf("docker load: %w", err)
+		return fmt.Errorf("docker load into VM: %w\n  load stderr: %s\n  save stderr: %s",
+			err, strings.TrimSpace(loadBuf.String()), strings.TrimSpace(saveBuf.String()))
+	}
+
+	if err := <-saveErr; err != nil {
+		return fmt.Errorf("docker save: %w\n  stderr: %s", err, strings.TrimSpace(saveBuf.String()))
 	}
 
 	return nil

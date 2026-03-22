@@ -97,12 +97,13 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Foreground mode: stream container logs
-	if err := orchestrator.StreamLogs(ctx); err != nil {
-		logger.Debug("stream ended", "error", err)
+	// Foreground mode: interactive shell
+	fmt.Fprintf(os.Stderr, "Sandbox ready. Entering interactive shell (exit to stop)...\n")
+	if err := orchestrator.Exec(ctx); err != nil {
+		logger.Debug("shell exited", "error", err)
 	}
 
-	// Graceful shutdown on stream end
+	// Shutdown on shell exit
 	orchestrator.Stop(context.Background(), false)
 
 	return nil
