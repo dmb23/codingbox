@@ -19,14 +19,14 @@
 
 **Purpose**: Initialize Go module, install dependencies, create project skeleton and shared types
 
-- [ ] T001 Initialize Go module and install dependencies: cobra, goproxy, modernc.org/sqlite, testify, gopkg.in/yaml.v3 in go.mod
-- [ ] T002 Create project directory structure per plan.md: cmd/codingbox/, internal/{cli,sandbox,proxy,config,store,models}/, tests/{contract,integration,unit}/
-- [ ] T003 [P] Define shared model types: SandboxSession, SecretMapping, RequestLogEntry, SandboxConfig, Mount in internal/models/session.go, internal/models/secret.go, internal/models/log_entry.go, internal/models/config.go
-- [ ] T004 [P] Implement sandbox config parsing (codingbox.yml schema) with YAML deserialization and validation in internal/config/sandbox.go
-- [ ] T005 [P] Implement global config loading (~/.config/codingbox/config.yml) with defaults for db_path, log_retention_days, ca_cert_path, ca_key_path in internal/config/global.go
-- [ ] T006 [P] Implement CA certificate generation and loading: generate self-signed CA keypair on first run, load existing CA, expose cert/key paths in internal/proxy/ca.go
-- [ ] T007 Initialize SQLite database with schema migrations: sessions table, request_logs table, indexes per data-model.md in internal/store/db.go
-- [ ] T008 Implement CLI root command with global flags (--config, --verbose) and version info in cmd/codingbox/main.go and internal/cli/root.go
+- [X] T001 Initialize Go module and install dependencies: cobra, goproxy, modernc.org/sqlite, testify, gopkg.in/yaml.v3 in go.mod
+- [X] T002 Create project directory structure per plan.md: cmd/codingbox/, internal/{cli,sandbox,proxy,config,store,models}/, tests/{contract,integration,unit}/
+- [X] T003 [P] Define shared model types: SandboxSession, SecretMapping, RequestLogEntry, SandboxConfig, Mount in internal/models/session.go, internal/models/secret.go, internal/models/log_entry.go, internal/models/config.go
+- [X] T004 [P] Implement sandbox config parsing (codingbox.yml schema) with YAML deserialization and validation in internal/config/sandbox.go
+- [X] T005 [P] Implement global config loading (~/.config/codingbox/config.yml) with defaults for db_path, log_retention_days, ca_cert_path, ca_key_path in internal/config/global.go
+- [X] T006 [P] Implement CA certificate generation and loading: generate self-signed CA keypair on first run, load existing CA, expose cert/key paths in internal/proxy/ca.go
+- [X] T007 Initialize SQLite database with schema migrations: sessions table, request_logs table, indexes per data-model.md in internal/store/db.go
+- [X] T008 Implement CLI root command with global flags (--config, --verbose) and version info in cmd/codingbox/main.go and internal/cli/root.go
 
 ---
 
@@ -36,10 +36,10 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T009 Implement sandboxd Unix socket HTTP client: POST /vm (create), GET /vm (list), DELETE /vm/{name} (destroy), parse JSON responses (vm_id, socketPath, stateDir, ca_cert_path) in internal/sandbox/client.go
-- [ ] T010 Implement MITM proxy server lifecycle: start goproxy on configurable port, configure HTTPS MITM with CA from T006, graceful shutdown, return assigned port in internal/proxy/server.go
-- [ ] T011 Implement basic request/response interceptor skeleton: OnRequest and OnResponse hooks on goproxy, pass-through forwarding (no injection or logging yet), attach session context in internal/proxy/interceptor.go
-- [ ] T012 Implement session CRUD in SQLite store: Create (with config snapshot), Get, List (with status filter), UpdateStatus (state machine transitions: created→running→stopped, created→failed, running→failed) in internal/store/sessions.go
+- [X] T009 Implement sandboxd Unix socket HTTP client: POST /vm (create), GET /vm (list), DELETE /vm/{name} (destroy), parse JSON responses (vm_id, socketPath, stateDir, ca_cert_path) in internal/sandbox/client.go
+- [X] T010 Implement MITM proxy server lifecycle: start goproxy on configurable port, configure HTTPS MITM with CA from T006, graceful shutdown, return assigned port in internal/proxy/server.go
+- [X] T011 Implement basic request/response interceptor skeleton: OnRequest and OnResponse hooks on goproxy, pass-through forwarding (no injection or logging yet), attach session context in internal/proxy/interceptor.go
+- [X] T012 Implement session CRUD in SQLite store: Create (with config snapshot), Get, List (with status filter), UpdateStatus (state machine transitions: created→running→stopped, created→failed, running→failed) in internal/store/sessions.go
 
 **Checkpoint**: MicroVM client can create/destroy VMs. Proxy starts and forwards HTTPS traffic. Sessions tracked in SQLite.
 
@@ -53,14 +53,14 @@
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement session orchestrator: coordinate VM creation (via client.go), proxy startup, container launch, session state tracking, and teardown sequence in internal/sandbox/session.go
-- [ ] T014 [US1] Implement container operations inside microVM: load base image into VM's Docker daemon (docker save/load via VM socket), run agent container with workspace mount, HTTP_PROXY/HTTPS_PROXY env vars pointing to host.docker.internal:{proxy_port}, CA cert volume mount, Docker volume for persistent state in internal/sandbox/container.go
-- [ ] T015 [US1] Implement `codingbox up` command: parse config, validate, start session orchestrator, stream container output in foreground mode, print session ID in detach mode, handle Ctrl+C for graceful shutdown in internal/cli/up.go
-- [ ] T016 [US1] Implement `codingbox down` command: look up session by ID or name, trigger graceful shutdown (stop container, destroy VM, stop proxy), update session status, support --force flag in internal/cli/down.go
-- [ ] T017 [P] [US1] Implement `codingbox ps` command: query sessions from store, display table (session ID, name, status, agent, created_at) or JSON output, support --all flag for stopped sessions in internal/cli/ps.go
-- [ ] T018 [P] [US1] Implement `codingbox config init` command: generate starter codingbox.yml template, error if file exists, support --output flag in internal/cli/config.go
-- [ ] T019 [US1] Implement `codingbox config validate` command: load and validate config, check mount paths exist, validate secret mappings have required fields, print errors to stderr in internal/cli/config.go
-- [ ] T020 [US1] Implement state persistence across restarts: use named Docker volume inside microVM for agent environment (packages, tool configs), re-attach volume on session restart, verify volume survives VM destroy/recreate cycle in internal/sandbox/container.go
+- [X] T013 [US1] Implement session orchestrator: coordinate VM creation (via client.go), proxy startup, container launch, session state tracking, and teardown sequence in internal/sandbox/session.go
+- [X] T014 [US1] Implement container operations inside microVM: load base image into VM's Docker daemon (docker save/load via VM socket), run agent container with workspace mount, HTTP_PROXY/HTTPS_PROXY env vars pointing to host.docker.internal:{proxy_port}, CA cert volume mount, Docker volume for persistent state in internal/sandbox/container.go
+- [X] T015 [US1] Implement `codingbox up` command: parse config, validate, start session orchestrator, stream container output in foreground mode, print session ID in detach mode, handle Ctrl+C for graceful shutdown in internal/cli/up.go
+- [X] T016 [US1] Implement `codingbox down` command: look up session by ID or name, trigger graceful shutdown (stop container, destroy VM, stop proxy), update session status, support --force flag in internal/cli/down.go
+- [X] T017 [P] [US1] Implement `codingbox ps` command: query sessions from store, display table (session ID, name, status, agent, created_at) or JSON output, support --all flag for stopped sessions in internal/cli/ps.go
+- [X] T018 [P] [US1] Implement `codingbox config init` command: generate starter codingbox.yml template, error if file exists, support --output flag in internal/cli/config.go
+- [X] T019 [US1] Implement `codingbox config validate` command: load and validate config, check mount paths exist, validate secret mappings have required fields, print errors to stderr in internal/cli/config.go
+- [X] T020 [US1] Implement state persistence across restarts: use named Docker volume inside microVM for agent environment (packages, tool configs), re-attach volume on session restart, verify volume survives VM destroy/recreate cycle in internal/sandbox/container.go
 
 **Checkpoint**: `codingbox up` launches an isolated microVM sandbox. `codingbox down` stops it. `codingbox ps` lists sessions. Mounts enforce rw/ro. State persists across restarts. Agent cannot access unmounted host paths.
 
@@ -76,14 +76,14 @@
 
 ### Tests for User Story 2 (constitutionally required)
 
-- [ ] T021 [P] [US2] Contract test: proxy injects correct header for matching host, no injection for non-matching host, template expansion works (e.g., "Bearer {secret}") in tests/contract/injection_test.go
-- [ ] T022 [P] [US2] Contract test: placeholder UUIDs are set as env vars in container, real secret values are not present in container environment in tests/contract/injection_test.go
+- [X] T021 [P] [US2] Contract test: proxy injects correct header for matching host, no injection for non-matching host, template expansion works (e.g., "Bearer {secret}") in tests/contract/injection_test.go
+- [X] T022 [P] [US2] Contract test: placeholder UUIDs are set as env vars in container, real secret values are not present in container environment in tests/contract/injection_test.go
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Implement secret injection logic: match request host against SecretMapping.target_host, expand header_template with secret_value, set header on outbound request, track which secrets were injected per request, log warning for misconfigured/missing mappings in internal/proxy/secrets.go
-- [ ] T024 [US2] Wire secret injection into proxy interceptor: load SecretMapping list from config at proxy startup, call injection logic in OnRequest hook, attach secrets_injected metadata to request context for downstream logging in internal/proxy/interceptor.go
-- [ ] T025 [US2] Inject placeholder UUIDs as environment variables in agent container: for each SecretMapping, set env var {NAME}_PLACEHOLDER={uuid} inside the container so the agent can reference secrets by placeholder without seeing real values in internal/sandbox/container.go
+- [X] T023 [US2] Implement secret injection logic: match request host against SecretMapping.target_host, expand header_template with secret_value, set header on outbound request, track which secrets were injected per request, log warning for misconfigured/missing mappings in internal/proxy/secrets.go
+- [X] T024 [US2] Wire secret injection into proxy interceptor: load SecretMapping list from config at proxy startup, call injection logic in OnRequest hook, attach secrets_injected metadata to request context for downstream logging in internal/proxy/interceptor.go
+- [X] T025 [US2] Inject placeholder UUIDs as environment variables in agent container: for each SecretMapping, set env var {NAME}_PLACEHOLDER={uuid} inside the container so the agent can reference secrets by placeholder without seeing real values in internal/sandbox/container.go
 
 **Checkpoint**: Secrets are injected into outbound requests per host. Agent sees only placeholder UUIDs. Non-matching hosts pass through unmodified. Missing mappings produce warnings, not failures.
 
@@ -99,16 +99,16 @@
 
 ### Tests for User Story 3 (constitutionally required)
 
-- [ ] T026 [P] [US3] Contract test: proxy logs all required fields (method, URL, headers, status, latency, timestamp, session_id) for every request in tests/contract/logging_test.go
-- [ ] T027 [P] [US3] Contract test: secret values in logged headers are replaced with placeholder UUIDs before persistence, raw secrets never appear in SQLite in tests/contract/redaction_test.go
+- [X] T026 [P] [US3] Contract test: proxy logs all required fields (method, URL, headers, status, latency, timestamp, session_id) for every request in tests/contract/logging_test.go
+- [X] T027 [P] [US3] Contract test: secret values in logged headers are replaced with placeholder UUIDs before persistence, raw secrets never appear in SQLite in tests/contract/redaction_test.go
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Implement request log CRUD and query methods: Insert log entry, query by session_id with filters (host, status, since/until, limit), return results sorted by timestamp in internal/store/logs.go
-- [ ] T029 [US3] Implement proxy request logger: capture method, URL, host, request headers, request body, response status, response headers, response body, latency (start/end timing), error details for failed requests, write to store via logs.go in internal/proxy/logger.go
-- [ ] T030 [US3] Implement secret redaction in logger: before persisting, scan all header values against loaded SecretMapping.secret_value entries, replace matches with corresponding placeholder UUID, populate secrets_injected array with names of injected secrets in internal/proxy/logger.go
-- [ ] T031 [US3] Wire logger into proxy interceptor: call logger in OnResponse hook (or OnError for failed requests), pass session_id from context, ensure logging does not block proxy forwarding (async write or buffered channel) in internal/proxy/interceptor.go
-- [ ] T032 [US3] Implement `codingbox logs` command: accept session-id positional arg, support --host, --status, --since, --until, --format (table/json), --limit flags, query store, render table output (timestamp, method, URL, status, latency, secrets) or JSON output in internal/cli/logs.go
+- [X] T028 [US3] Implement request log CRUD and query methods: Insert log entry, query by session_id with filters (host, status, since/until, limit), return results sorted by timestamp in internal/store/logs.go
+- [X] T029 [US3] Implement proxy request logger: capture method, URL, host, request headers, request body, response status, response headers, response body, latency (start/end timing), error details for failed requests, write to store via logs.go in internal/proxy/logger.go
+- [X] T030 [US3] Implement secret redaction in logger: before persisting, scan all header values against loaded SecretMapping.secret_value entries, replace matches with corresponding placeholder UUID, populate secrets_injected array with names of injected secrets in internal/proxy/logger.go
+- [X] T031 [US3] Wire logger into proxy interceptor: call logger in OnResponse hook (or OnError for failed requests), pass session_id from context, ensure logging does not block proxy forwarding (async write or buffered channel) in internal/proxy/interceptor.go
+- [X] T032 [US3] Implement `codingbox logs` command: accept session-id positional arg, support --host, --status, --since, --until, --format (table/json), --limit flags, query store, render table output (timestamp, method, URL, status, latency, secrets) or JSON output in internal/cli/logs.go
 
 **Checkpoint**: All HTTP requests are logged with full metadata. Secrets are redacted. `codingbox logs` provides queryable access with filters. Failed requests include error context.
 
@@ -118,12 +118,12 @@
 
 **Purpose**: Edge cases, hardening, and cross-story improvements
 
-- [ ] T033 Handle network connectivity loss: proxy logs connection failures with error context, agent receives clear network error (not silent hang) in internal/proxy/logger.go and internal/proxy/interceptor.go
-- [ ] T034 Handle concurrent sandbox sessions: verify each session gets independent proxy instance on unique port, session IDs are independent ULIDs, logs are correlated by session_id with no cross-contamination in internal/sandbox/session.go
-- [ ] T035 [P] Handle disk space exhaustion: detect low disk space on stateDir, surface clear error to operator with cleanup guidance via stderr in internal/sandbox/session.go
-- [ ] T036 [P] Implement log retention: delete request_logs older than log_retention_days on session creation or via periodic cleanup, configurable in global config in internal/store/logs.go
-- [ ] T037 [P] Add structured application logging via log/slog: consistent JSON log output for codingbox's own operations (not proxy request logs), log levels configurable via --verbose flag in internal/cli/root.go
-- [ ] T038 Validate quickstart.md end-to-end: walk through the quickstart flow (config init → edit config → up → make requests → logs → down), verify all commands work as documented
+- [X] T033 Handle network connectivity loss: proxy logs connection failures with error context, agent receives clear network error (not silent hang) in internal/proxy/logger.go and internal/proxy/interceptor.go
+- [X] T034 Handle concurrent sandbox sessions: verify each session gets independent proxy instance on unique port, session IDs are independent ULIDs, logs are correlated by session_id with no cross-contamination in internal/sandbox/session.go
+- [X] T035 [P] Handle disk space exhaustion: detect low disk space on stateDir, surface clear error to operator with cleanup guidance via stderr in internal/sandbox/session.go
+- [X] T036 [P] Implement log retention: delete request_logs older than log_retention_days on session creation or via periodic cleanup, configurable in global config in internal/store/logs.go
+- [X] T037 [P] Add structured application logging via log/slog: consistent JSON log output for codingbox's own operations (not proxy request logs), log levels configurable via --verbose flag in internal/cli/root.go
+- [X] T038 Validate quickstart.md end-to-end: walk through the quickstart flow (config init → edit config → up → make requests → logs → down), verify all commands work as documented
 
 ---
 

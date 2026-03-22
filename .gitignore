@@ -1,1 +1,21 @@
 .claude/
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+codingbox
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.tmp
+
+# Environment
+.env*
