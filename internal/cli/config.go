@@ -72,11 +72,11 @@ workspace: /path/to/your/project
 
 func runConfigInit(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(configInitOutput); err == nil {
-		return fmt.Errorf("codingbox: error: file already exists: %s", configInitOutput)
+		return fmt.Errorf("file already exists: %s", configInitOutput)
 	}
 
 	if err := os.WriteFile(configInitOutput, []byte(starterTemplate), 0644); err != nil {
-		return fmt.Errorf("codingbox: error: writing config: %w", err)
+		return fmt.Errorf("writing config: %w", err)
 	}
 
 	fmt.Printf("Created %s\n", configInitOutput)
@@ -86,8 +86,7 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 func runConfigValidate(cmd *cobra.Command, args []string) error {
 	_, err := config.LoadSandboxConfig(cfgFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "codingbox: error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	fmt.Println("Configuration is valid")

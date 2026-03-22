@@ -32,12 +32,12 @@ func init() {
 func runPS(cmd *cobra.Command, args []string) error {
 	globalCfg, err := config.LoadGlobalConfig()
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	db, err := store.Open(globalCfg.DBPath)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	defer db.Close()
 
@@ -50,7 +50,7 @@ func runPS(cmd *cobra.Command, args []string) error {
 
 	sessions, err := sessionStore.List(statusFilter)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	if psFormat == "json" {

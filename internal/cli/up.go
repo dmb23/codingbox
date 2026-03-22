@@ -36,7 +36,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	// Load sandbox config
 	cfg, err := config.LoadSandboxConfig(cfgFile)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	if sessionName != "" {
@@ -46,19 +46,19 @@ func runUp(cmd *cobra.Command, args []string) error {
 	// Load global config
 	globalCfg, err := config.LoadGlobalConfig()
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	// Initialize CA
 	ca, err := proxy.LoadOrGenerateCA(globalCfg.CACertPath, globalCfg.CAKeyPath)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	// Initialize database
 	db, err := store.Open(globalCfg.DBPath)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	defer db.Close()
 
@@ -89,7 +89,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	// Start session
 	session, err := orchestrator.Start(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	if detach {

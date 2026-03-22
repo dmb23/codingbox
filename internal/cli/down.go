@@ -32,12 +32,12 @@ func runDown(cmd *cobra.Command, args []string) error {
 
 	globalCfg, err := config.LoadGlobalConfig()
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	db, err := store.Open(globalCfg.DBPath)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	defer db.Close()
 
@@ -48,12 +48,12 @@ func runDown(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		session, err = sessionStore.FindByName(identifier)
 		if err != nil {
-			return fmt.Errorf("codingbox: error: session not found: %s", identifier)
+			return fmt.Errorf("session not found: %s", identifier)
 		}
 	}
 
 	if session.Status != models.StatusRunning && session.Status != models.StatusCreated {
-		return fmt.Errorf("codingbox: error: session %s is already %s", session.ID, session.Status)
+		return fmt.Errorf("session %s is already %s", session.ID, session.Status)
 	}
 
 	// Destroy VM
@@ -70,7 +70,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 
 	// Update session status
 	if err := sessionStore.UpdateStatus(session.ID, models.StatusStopped, ""); err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	fmt.Printf("Session %s stopped\n", session.ID)

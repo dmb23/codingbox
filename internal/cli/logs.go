@@ -43,12 +43,12 @@ func runLogs(cmd *cobra.Command, args []string) error {
 
 	globalCfg, err := config.LoadGlobalConfig()
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	db, err := store.Open(globalCfg.DBPath)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	defer db.Close()
 
@@ -67,7 +67,7 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	if logsSince != "" {
 		t, err := time.Parse(time.RFC3339, logsSince)
 		if err != nil {
-			return fmt.Errorf("codingbox: error: invalid --since timestamp: %w", err)
+			return fmt.Errorf("invalid --since timestamp: %w", err)
 		}
 		q.Since = &t
 	}
@@ -75,14 +75,14 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	if logsUntil != "" {
 		t, err := time.Parse(time.RFC3339, logsUntil)
 		if err != nil {
-			return fmt.Errorf("codingbox: error: invalid --until timestamp: %w", err)
+			return fmt.Errorf("invalid --until timestamp: %w", err)
 		}
 		q.Until = &t
 	}
 
 	entries, err := logStore.Query(q)
 	if err != nil {
-		return fmt.Errorf("codingbox: error: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	if logsFormat == "json" {
