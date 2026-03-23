@@ -19,9 +19,9 @@
 
 **Purpose**: Project initialization and Go module structure
 
-- [ ] T001 Create project directory structure per plan.md: `cmd/codingbox/`, `internal/cli/`, `internal/config/`, `internal/sandbox/`, `internal/proxy/`, `internal/store/`, `internal/models/`, `tests/integration/`, `tests/unit/`
-- [ ] T002 Initialize Go module (`go mod init`) and add dependencies: `github.com/docker/docker`, `github.com/spf13/cobra`, `github.com/spf13/viper`, `github.com/elazarl/goproxy`, `modernc.org/sqlite`; run `go mod tidy`
-- [ ] T003 [P] Create `codingbox.yaml.example` at repository root with sample config per contracts/cli-commands.md
+- [x] T001 Create project directory structure per plan.md: `cmd/codingbox/`, `internal/cli/`, `internal/config/`, `internal/sandbox/`, `internal/proxy/`, `internal/store/`, `internal/models/`, `tests/integration/`, `tests/unit/`
+- [x] T002 Initialize Go module (`go mod init`) and add dependencies: `github.com/docker/docker`, `github.com/spf13/cobra`, `github.com/spf13/viper`, `github.com/elazarl/goproxy`, `modernc.org/sqlite`; run `go mod tidy`
+- [x] T003 [P] Create `codingbox.yaml.example` at repository root with sample config per contracts/cli-commands.md
 
 ---
 
@@ -31,12 +31,12 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 [P] Define model structs: SandboxConfig, MountConfig, SecretMapping in `internal/models/config.go` per data-model.md
-- [ ] T005 [P] Define Sandbox runtime state struct in `internal/models/sandbox.go` per data-model.md (id, container_id, network_id, proxy_addr, state, created_at)
-- [ ] T006 [P] Define TrafficLog struct in `internal/models/traffic.go` per data-model.md
-- [ ] T007 Implement config loading in `internal/config/config.go`: load YAML file via viper, validate required fields (image), apply defaults (workdir=`.`, proxy_port=0, mount mode=`ro`, replace_in=`[headers,body,query]`)
-- [ ] T008 Implement CLI flag override merging in `internal/config/config.go`: parse `--mount` (`source:target[:ro|rw]`) and `--secret` (`placeholder=value[:locations]`) flag formats, merge with config file values
-- [ ] T009 Create root cobra command in `internal/cli/root.go` and wire to `cmd/codingbox/main.go` entry point; verify the binary builds and `codingbox --help` prints usage
+- [x] T004 [P] Define model structs: SandboxConfig, MountConfig, SecretMapping in `internal/models/config.go` per data-model.md
+- [x] T005 [P] Define Sandbox runtime state struct in `internal/models/sandbox.go` per data-model.md (id, container_id, network_id, proxy_addr, state, created_at)
+- [x] T006 [P] Define TrafficLog struct in `internal/models/traffic.go` per data-model.md
+- [x] T007 Implement config loading in `internal/config/config.go`: load YAML file via viper, validate required fields (image), apply defaults (workdir=`.`, proxy_port=0, mount mode=`ro`, replace_in=`[headers,body,query]`)
+- [x] T008 Implement CLI flag override merging in `internal/config/config.go`: parse `--mount` (`source:target[:ro|rw]`) and `--secret` (`placeholder=value[:locations]`) flag formats, merge with config file values
+- [x] T009 Create root cobra command in `internal/cli/root.go` and wire to `cmd/codingbox/main.go` entry point; verify the binary builds and `codingbox --help` prints usage
 
 **Checkpoint**: Foundation ready — `go build ./cmd/codingbox/` succeeds, `codingbox --help` prints command structure
 
@@ -50,15 +50,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement Docker network creation in `internal/sandbox/network.go`: create an isolated bridge network (`Internal: true`) with unique name per session, return network ID
-- [ ] T011 [US1] Implement Docker network cleanup in `internal/sandbox/network.go`: disconnect containers and remove network by ID
-- [ ] T012 [US1] Implement container creation in `internal/sandbox/sandbox.go`: create container from OCI image with TTY enabled (`Tty: true`, `OpenStdin: true`, `AttachStdin/Stdout/Stderr: true`), mount workdir as read-write bind mount, connect to isolated network
-- [ ] T013 [US1] Implement interactive TTY attachment in `internal/sandbox/attach.go`: attach to container, set host terminal to raw mode, bidirectional stream copy (stdin→container, container→stdout), restore terminal on exit
-- [ ] T014 [US1] Implement sandbox lifecycle orchestration in `internal/sandbox/sandbox.go`: `Start()` creates network → creates container → starts container → attaches TTY; `Stop()` detaches → stops container → removes container → removes network
-- [ ] T015 [US1] Implement signal handling in `internal/sandbox/sandbox.go`: trap SIGINT and SIGTERM, trigger graceful `Stop()` on signal, ensure terminal state is restored
-- [ ] T016 [US1] Implement `codingbox run` command (basic) in `internal/cli/run.go`: load config, validate image is set, create Sandbox, call `Start()`, wait for session end, call `Stop()`, exit with appropriate code per contracts/cli-commands.md
-- [ ] T017 [US1] Write unit test in `tests/unit/config_test.go`: verify YAML loading, flag override merging, default values, validation errors for missing image
-- [ ] T018 [US1] Verify US1 end-to-end: build binary, run `codingbox run --image ubuntu:22.04`, confirm interactive shell starts, create a file in the mounted workdir, exit, verify file exists on host, verify no orphaned containers or networks (`docker ps -a`, `docker network ls`)
+- [x] T010 [US1] Implement Docker network creation in `internal/sandbox/network.go`: create an isolated bridge network (`Internal: true`) with unique name per session, return network ID
+- [x] T011 [US1] Implement Docker network cleanup in `internal/sandbox/network.go`: disconnect containers and remove network by ID
+- [x] T012 [US1] Implement container creation in `internal/sandbox/sandbox.go`: create container from OCI image with TTY enabled (`Tty: true`, `OpenStdin: true`, `AttachStdin/Stdout/Stderr: true`), mount workdir as read-write bind mount, connect to isolated network
+- [x] T013 [US1] Implement interactive TTY attachment in `internal/sandbox/attach.go`: attach to container, set host terminal to raw mode, bidirectional stream copy (stdin→container, container→stdout), restore terminal on exit
+- [x] T014 [US1] Implement sandbox lifecycle orchestration in `internal/sandbox/sandbox.go`: `Start()` creates network → creates container → starts container → attaches TTY; `Stop()` detaches → stops container → removes container → removes network
+- [x] T015 [US1] Implement signal handling in `internal/sandbox/sandbox.go`: trap SIGINT and SIGTERM, trigger graceful `Stop()` on signal, ensure terminal state is restored
+- [x] T016 [US1] Implement `codingbox run` command (basic) in `internal/cli/run.go`: load config, validate image is set, create Sandbox, call `Start()`, wait for session end, call `Stop()`, exit with appropriate code per contracts/cli-commands.md
+- [x] T017 [US1] Write unit test in `tests/unit/config_test.go`: verify YAML loading, flag override merging, default values, validation errors for missing image
+- [x] T018 [US1] Verify US1 end-to-end: build binary, run `codingbox run --image ubuntu:22.04`, confirm interactive shell starts, create a file in the mounted workdir, exit, verify file exists on host, verify no orphaned containers or networks (`docker ps -a`, `docker network ls`)
 
 **Checkpoint**: User Story 1 fully functional — interactive sandbox with workdir mount and clean cleanup
 
@@ -72,16 +72,16 @@
 
 ### Implementation for User Story 2
 
-- [ ] T019 [P] [US2] Implement CA certificate generation in `internal/proxy/certs.go`: generate self-signed CA cert+key on first run, store in `~/.codingbox/ca/`, load existing CA on subsequent runs, expose CA cert path for container mounting
-- [ ] T020 [P] [US2] Implement SQLite store initialization in `internal/store/store.go`: open database at `~/.codingbox/traffic.db`, create `traffic_logs` table with schema from data-model.md, set WAL mode + `PRAGMA synchronous = NORMAL`, create indexes
-- [ ] T021 [US2] Implement traffic log insert and query operations in `internal/store/queries.go`: `InsertLog(TrafficLog)`, `QueryLogs(filters)` with filtering by session, method, URL, status, since, limit
-- [ ] T022 [US2] Implement MITM proxy setup in `internal/proxy/proxy.go`: create goproxy instance with CA cert, configure HTTPS MITM for all hosts, start HTTP server on configured port (or auto-assign), expose proxy address
-- [ ] T023 [US2] Implement request/response logging handler in `internal/proxy/logger.go`: goproxy `OnRequest().DoFunc()` captures method, URL, headers, body; `OnResponse().DoFunc()` captures status, headers, body; write TrafficLog to store; measure duration_ms
-- [ ] T024 [US2] Integrate proxy into sandbox lifecycle in `internal/sandbox/sandbox.go`: `Start()` now starts proxy before container, injects `HTTP_PROXY`/`HTTPS_PROXY` env vars pointing to proxy address, bind-mounts CA cert into container at `/usr/local/share/ca-certificates/codingbox.crt`, sets `SSL_CERT_FILE` and `NODE_EXTRA_CA_CERTS` env vars
-- [ ] T025 [US2] Implement `codingbox logs` command in `internal/cli/logs.go`: parse filter flags per contracts/cli-commands.md, query store, format output as table (default) or JSON, include `--body` flag for verbose output
-- [ ] T026 [US2] Implement `codingbox ca show` and `codingbox ca regenerate` subcommands in `internal/cli/ca.go` per contracts/cli-commands.md
-- [ ] T027 [P] [US2] Write unit test in `tests/unit/store_test.go`: verify SQLite init, log insertion, query filtering by method/URL/status/since/limit
-- [ ] T028 [US2] Verify US2 end-to-end: build binary, run `codingbox run --image ubuntu:22.04`, inside container run `curl https://httpbin.org/get`, exit, run `codingbox logs`, confirm the request+response are logged with correct URL, status 200, headers, and body; verify `codingbox logs --format json` outputs valid JSON
+- [x] T019 [P] [US2] Implement CA certificate generation in `internal/proxy/certs.go`: generate self-signed CA cert+key on first run, store in `~/.codingbox/ca/`, load existing CA on subsequent runs, expose CA cert path for container mounting
+- [x] T020 [P] [US2] Implement SQLite store initialization in `internal/store/store.go`: open database at `~/.codingbox/traffic.db`, create `traffic_logs` table with schema from data-model.md, set WAL mode + `PRAGMA synchronous = NORMAL`, create indexes
+- [x] T021 [US2] Implement traffic log insert and query operations in `internal/store/queries.go`: `InsertLog(TrafficLog)`, `QueryLogs(filters)` with filtering by session, method, URL, status, since, limit
+- [x] T022 [US2] Implement MITM proxy setup in `internal/proxy/proxy.go`: create goproxy instance with CA cert, configure HTTPS MITM for all hosts, start HTTP server on configured port (or auto-assign), expose proxy address
+- [x] T023 [US2] Implement request/response logging handler in `internal/proxy/logger.go`: goproxy `OnRequest().DoFunc()` captures method, URL, headers, body; `OnResponse().DoFunc()` captures status, headers, body; write TrafficLog to store; measure duration_ms
+- [x] T024 [US2] Integrate proxy into sandbox lifecycle in `internal/sandbox/sandbox.go`: `Start()` now starts proxy before container, injects `HTTP_PROXY`/`HTTPS_PROXY` env vars pointing to proxy address, bind-mounts CA cert into container at `/usr/local/share/ca-certificates/codingbox.crt`, sets `SSL_CERT_FILE` and `NODE_EXTRA_CA_CERTS` env vars
+- [x] T025 [US2] Implement `codingbox logs` command in `internal/cli/logs.go`: parse filter flags per contracts/cli-commands.md, query store, format output as table (default) or JSON, include `--body` flag for verbose output
+- [x] T026 [US2] Implement `codingbox ca show` and `codingbox ca regenerate` subcommands in `internal/cli/ca.go` per contracts/cli-commands.md
+- [x] T027 [P] [US2] Write unit test in `tests/unit/store_test.go`: verify SQLite init, log insertion, query filtering by method/URL/status/since/limit
+- [x] T028 [US2] Verify US2 end-to-end: build binary, run `codingbox run --image ubuntu:22.04`, inside container run `curl https://httpbin.org/get`, exit, run `codingbox logs`, confirm the request+response are logged with correct URL, status 200, headers, and body; verify `codingbox logs --format json` outputs valid JSON
 
 **Checkpoint**: User Stories 1 AND 2 both work — sandbox with full traffic logging and queryable logs
 
@@ -95,7 +95,7 @@
 
 ### Implementation for User Story 3
 
-- [ ] T029 [US3] Implement secret replacement logic in `internal/proxy/secrets.go`: given a list of SecretMapping, perform find-and-replace on request headers, body, and/or query parameters based on each secret's `replace_in` config; return modified request and whether any replacement occurred
+- [x] T029 [US3] Implement secret replacement logic in `internal/proxy/secrets.go`: given a list of SecretMapping, perform find-and-replace on request headers, body, and/or query parameters based on each secret's `replace_in` config; return modified request and whether any replacement occurred
 - [ ] T030 [US3] Implement response reverse-replacement in `internal/proxy/secrets.go`: scan response headers and body for real secret values, replace with corresponding placeholders based on `replace_in` config
 - [ ] T031 [US2] Integrate secret handlers into proxy pipeline in `internal/proxy/proxy.go`: add request handler that calls secret replacement before forwarding, add response handler that calls reverse-replacement before returning to container; set `secrets_replaced` flag in TrafficLog
 - [ ] T032 [P] [US3] Write unit test in `tests/unit/secrets_test.go`: verify replacement in headers only, body only, query only, all locations, no false positives when placeholder appears in non-configured location, reverse replacement in responses

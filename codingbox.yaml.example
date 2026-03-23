@@ -1,0 +1,32 @@
+# codingbox.yaml - Sandbox configuration
+#
+# See: https://github.com/mischa/codingbox
+
+# OCI image to use for the sandbox (required)
+image: "ubuntu:22.04"
+
+# Working directory to mount into the container (default: current directory)
+# workdir: "."
+
+# Additional directory mounts
+# mounts:
+#   - source: "/path/to/shared/libs"
+#     target: "/libs"
+#     mode: "ro"         # ro (read-only, default) or rw (read-write)
+#   - source: "/path/to/output"
+#     target: "/output"
+#     mode: "rw"
+
+# Secret mappings (placeholder → real value)
+# The proxy replaces placeholders in outbound requests with real values.
+# Real values never enter the sandbox.
+# secrets:
+#   - placeholder: "__GITHUB_TOKEN__"
+#     value: "ghp_xxxxxxxxxxxx"
+#     replace_in: ["headers"]
+#   - placeholder: "__ANTHROPIC_API_KEY__"
+#     value: "sk-ant-xxxxxxxxxxxx"
+#     replace_in: ["headers", "body"]
+
+# Port for the MITM proxy (0 = auto-assign)
+# proxy_port: 0
