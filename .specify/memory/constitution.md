@@ -1,50 +1,78 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: N/A (template) → 1.0.0
+- Added principles:
+  - I. Verify Before Assuming Success (NEW)
+- Added sections:
+  - Verification Standards (NEW)
+  - Development Workflow (NEW)
+- Removed sections:
+  - [SECTION_2_NAME] placeholder removed
+  - [SECTION_3_NAME] placeholder removed
+  - Principles 2–5 placeholders removed (user provided 1 principle)
+- Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ no changes needed (Constitution Check section is generic)
+  - .specify/templates/spec-template.md ✅ no changes needed
+  - .specify/templates/tasks-template.md ✅ no changes needed
+  - .specify/templates/checklist-template.md ✅ no changes needed
+  - .specify/templates/commands/ ✅ no command files exist
+- Follow-up TODOs: none
+-->
+
+# CodingBox Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Verify Before Assuming Success (NON-NEGOTIABLE)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+A compiling build is NOT proof of success. Every change MUST be
+verified through actual execution before it is considered done.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- **CLI work**: Run the command and inspect its output. Verify
+  that the behavior matches expectations, not just that it exits
+  without error.
+- **Non-CLI work**: Write tests that exercise the changed behavior
+  and run them. Passing tests are the proof of success.
+- **All work**: Never rely solely on compilation, type-checking, or
+  linting as evidence that a change works. These catch categories
+  of errors but do not prove correctness.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+**Rationale**: Silent failures, wrong outputs, and regressions
+slip through when verification is skipped. The cost of running
+the code is always lower than the cost of debugging a false
+assumption later.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+## Verification Standards
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- For every implementation task, the definition of done includes
+  a verification step that exercises the feature end-to-end.
+- When fixing a bug, reproduce the bug first, then verify the
+  fix eliminates it.
+- When adding a feature, demonstrate the feature working before
+  marking it complete.
+- Automated tests MUST be run, not just written. A test file
+  that has never been executed proves nothing.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## Development Workflow
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- Implement the change.
+- Verify: run the relevant command or test suite.
+- Review the output for correctness (not just zero exit code).
+- Only then mark the work as done.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution is the authoritative source of project
+principles. All development work MUST comply with these
+principles.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+- **Amendments**: Any change to this constitution MUST be
+  documented with a version bump and rationale.
+- **Versioning**: MAJOR.MINOR.PATCH semantic versioning.
+  MAJOR for principle removals or redefinitions, MINOR for
+  new principles or material expansions, PATCH for wording
+  and clarification changes.
+- **Compliance**: Every task checkpoint and PR review MUST
+  verify that the verification principle was followed.
+
+**Version**: 1.0.0 | **Ratified**: 2026-03-23 | **Last Amended**: 2026-03-23
