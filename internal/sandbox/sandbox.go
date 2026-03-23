@@ -3,9 +3,12 @@ package sandbox
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,18 +25,27 @@ import (
 
 // Manager handles the sandbox lifecycle.
 type Manager struct {
-	cli    *client.Client
-	sb     *models.Sandbox
-	proxy  *proxy.Proxy
-	store  *store.Store
-	cancel context.CancelFunc
+	cli      *client.Client
+	sb       *models.Sandbox
+	proxy    *proxy.Proxy
+	store    *store.Store
+	cancel   context.CancelFunc
+	stopOnce sync.Once
 }
 
 // NewManager creates a new sandbox manager.
 func NewManager(cfg *models.SandboxConfig) (*Manager, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil, fmt.Errorf("connecting to Docker: %w", err)
+		return nil, fmt.Errorf("connecting to Docker: %w\nIs Docker installed? Check with: docker --version", err)
+	}
+
+	// Verify Docker daemon is reachable.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(ctx, client.PingOptions{}); err != nil {
+		cli.Close()
+		return nil, fmt.Errorf("Docker daemon is not running: %w\nStart Docker with: docker info", err)
 	}
 
 	sb := &models.Sandbox{
@@ -86,6 +98,9 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	proxyAddr, err := p.Start(m.sb.Config.ProxyPort)
 	if err != nil {
+		if strings.Contains(err.Error(), "address already in use") {
+			return fmt.Errorf("proxy port %d is already in use: %w\nTry a different port with --proxy-port or use 0 for auto-assign", m.sb.Config.ProxyPort, err)
+		}
 		return fmt.Errorf("starting proxy: %w", err)
 	}
 	// Extract port from the listen address for use with host.docker.internal.
@@ -124,9 +139,14 @@ func (m *Manager) Start(ctx context.Context) error {
 		})
 	}
 
+	// 3a. Ensure image is available locally (pull if needed).
+	if err := m.ensureImage(ctx); err != nil {
+		return err
+	}
+
 	env := m.buildEnv()
 
-	// 3. Create container.
+	// 3b. Create container.
 	containerName := fmt.Sprintf("codingbox-%s", m.sb.ID)
 	createResp, err := m.cli.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Config: &container.Config{
@@ -151,6 +171,9 @@ func (m *Manager) Start(ctx context.Context) error {
 		Name: containerName,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "permission denied") {
+			return fmt.Errorf("creating container: %w\nCheck mount directory permissions. Ensure Docker has access to the directories being mounted", err)
+		}
 		return fmt.Errorf("creating container: %w", err)
 	}
 	m.sb.ContainerID = createResp.ID
@@ -172,34 +195,69 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop cleans up all sandbox resources.
+// Stop cleans up all sandbox resources. It is safe to call multiple times.
 func (m *Manager) Stop() {
-	m.sb.State = models.StateStopping
+	m.stopOnce.Do(func() {
+		m.sb.State = models.StateStopping
 
-	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cleanupCancel()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
 
-	if m.sb.ContainerID != "" {
-		timeout := 3
-		_, _ = m.cli.ContainerStop(cleanupCtx, m.sb.ContainerID, client.ContainerStopOptions{Timeout: &timeout})
-		_, _ = m.cli.ContainerRemove(cleanupCtx, m.sb.ContainerID, client.ContainerRemoveOptions{Force: true})
-		m.sb.ContainerID = ""
+		if m.sb.ContainerID != "" {
+			timeout := 3
+			if _, err := m.cli.ContainerStop(cleanupCtx, m.sb.ContainerID, client.ContainerStopOptions{Timeout: &timeout}); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
+			}
+			if _, err := m.cli.ContainerRemove(cleanupCtx, m.sb.ContainerID, client.ContainerRemoveOptions{Force: true}); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to remove container: %v\n", err)
+			}
+			m.sb.ContainerID = ""
+		}
+
+		if m.sb.NetworkID != "" {
+			if err := RemoveNetwork(cleanupCtx, m.cli, m.sb.NetworkID); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to remove network: %v\n", err)
+			}
+			m.sb.NetworkID = ""
+		}
+
+		if m.proxy != nil {
+			m.proxy.Stop()
+		}
+		if m.store != nil {
+			m.store.Close()
+		}
+
+		m.sb.State = models.StateStopped
+		m.cli.Close()
+	})
+}
+
+// ensureImage checks if the image exists locally and pulls it if not.
+func (m *Manager) ensureImage(ctx context.Context) error {
+	img := m.sb.Config.Image
+
+	// Check if image exists locally.
+	_, err := m.cli.ImageInspect(ctx, img)
+	if err == nil {
+		return nil // Image exists locally.
 	}
 
-	if m.sb.NetworkID != "" {
-		_ = RemoveNetwork(cleanupCtx, m.cli, m.sb.NetworkID)
-		m.sb.NetworkID = ""
+	// Image not found locally — attempt to pull.
+	fmt.Fprintf(os.Stderr, "Image %q not found locally, pulling...\n", img)
+	pullResp, err := m.cli.ImagePull(ctx, img, client.ImagePullOptions{})
+	if err != nil {
+		return fmt.Errorf("pulling image %q: %w\nEnsure the image name is correct and accessible. For local images, build with: docker build -t %s .", img, err, img)
+	}
+	defer pullResp.Close()
+
+	// Consume the pull output (required to complete the pull).
+	if _, err := io.Copy(os.Stderr, pullResp); err != nil {
+		return fmt.Errorf("reading pull progress: %w", err)
 	}
 
-	if m.proxy != nil {
-		m.proxy.Stop()
-	}
-	if m.store != nil {
-		m.store.Close()
-	}
-
-	m.sb.State = models.StateStopped
-	m.cli.Close()
+	fmt.Fprintf(os.Stderr, "Successfully pulled %q\n", img)
+	return nil
 }
 
 // buildEnv returns environment variables for the container.

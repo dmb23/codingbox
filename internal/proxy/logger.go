@@ -21,7 +21,7 @@ func (p *Proxy) installHandlers() {
 
 		// Apply secret replacement on outbound request.
 		if len(p.secrets) > 0 {
-			req = replaceSecretsInRequest(req, p.secrets)
+			req = ReplaceSecretsInRequest(req, p.secrets)
 		}
 
 		return req, nil
@@ -44,7 +44,7 @@ func (p *Proxy) installHandlers() {
 		// Apply reverse secret replacement on inbound response.
 		secretsReplaced := false
 		if len(p.secrets) > 0 {
-			resp, secretsReplaced = replaceSecretsInResponse(resp, p.secrets)
+			resp, secretsReplaced = ReplaceSecretsInResponse(resp, p.secrets)
 		}
 
 		// Capture response info.

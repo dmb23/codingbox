@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mischa/codingbox/internal/config"
 	"github.com/mischa/codingbox/internal/sandbox"
@@ -64,6 +65,10 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	if err := mgr.Start(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "proxy") || strings.Contains(errMsg, "TLS") || strings.Contains(errMsg, "CA") {
+			os.Exit(3)
+		}
 		os.Exit(2)
 	}
 

@@ -9,8 +9,8 @@ import (
 	"github.com/mischa/codingbox/internal/models"
 )
 
-// replaceSecretsInRequest replaces placeholders with real values in the outbound request.
-func replaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) *http.Request {
+// ReplaceSecretsInRequest replaces placeholders with real values in the outbound request.
+func ReplaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) *http.Request {
 	for _, s := range secrets {
 		for _, loc := range s.ReplaceIn {
 			switch loc {
@@ -44,8 +44,8 @@ func replaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) 
 	return req
 }
 
-// replaceSecretsInResponse replaces real values with placeholders in the inbound response.
-func replaceSecretsInResponse(resp *http.Response, secrets []models.SecretMapping) (*http.Response, bool) {
+// ReplaceSecretsInResponse replaces real values with placeholders in the inbound response.
+func ReplaceSecretsInResponse(resp *http.Response, secrets []models.SecretMapping) (*http.Response, bool) {
 	replaced := false
 	for _, s := range secrets {
 		for _, loc := range s.ReplaceIn {
