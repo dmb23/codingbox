@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/codingbox/codingbox/internal/config"
@@ -67,7 +68,8 @@ func runUp(cmd *cobra.Command, args []string) error {
 
 	// Create orchestrator
 	vmClient := sandbox.NewClient("")
-	orchestrator := sandbox.NewSessionOrchestrator(vmClient, sessionStore, logStore, ca, logger)
+	dataDir := filepath.Dir(globalCfg.DBPath) // e.g. ~/.local/share/codingbox
+	orchestrator := sandbox.NewSessionOrchestrator(vmClient, sessionStore, logStore, ca, dataDir, logger)
 
 	// Run log retention on session creation
 	orchestrator.RunLogRetention(globalCfg.LogRetentionDays)

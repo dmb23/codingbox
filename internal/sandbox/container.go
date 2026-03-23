@@ -23,6 +23,7 @@ type ContainerConfig struct {
 	CACertPEM    []byte
 	Tools        []string
 	SessionID    string
+	StateDir     string // Host-side directory for persistent state
 }
 
 // ContainerManager manages containers inside a microVM's Docker daemon.
@@ -82,9 +83,10 @@ func (cm *ContainerManager) Start(ctx context.Context, cfg ContainerConfig) erro
 		args = append(args, "-e", envName+"="+s.ID)
 	}
 
-	// Persistent state volume (survives VM destroy/recreate)
-	volumeName := "codingbox-state-" + cfg.SessionID[:8]
-	args = append(args, "-v", volumeName+":/home/agent/.local:rw")
+	// Persistent state directory on host (survives VM destroy/recreate)
+	if cfg.StateDir != "" {
+		args = append(args, "-v", cfg.StateDir+":/home/agent/.local:rw")
+	}
 
 	// CA certificate mount for HTTPS interception
 	if len(cfg.CACertPEM) > 0 {

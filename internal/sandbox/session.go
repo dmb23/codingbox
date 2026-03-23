@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -23,15 +27,17 @@ type SessionOrchestrator struct {
 	sessionStore *store.SessionStore
 	logStore     *store.LogStore
 	ca           *proxy.CA
+	dataDir      string // base directory for persistent state (e.g. ~/.local/share/codingbox)
 	logger       *slog.Logger
 
 	// Active session state
-	session      *models.SandboxSession
-	vmName       string
-	proxyServer  *proxy.Server
-	container    *ContainerManager
-	interceptor  *proxy.Interceptor
-	stopOnce     sync.Once
+	session         *models.SandboxSession
+	vmName          string
+	previousContext string
+	proxyServer     *proxy.Server
+	container       *ContainerManager
+	interceptor     *proxy.Interceptor
+	stopOnce        sync.Once
 }
 
 // NewSessionOrchestrator creates a new orchestrator.
@@ -40,6 +46,7 @@ func NewSessionOrchestrator(
 	sessionStore *store.SessionStore,
 	logStore *store.LogStore,
 	ca *proxy.CA,
+	dataDir string,
 	logger *slog.Logger,
 ) *SessionOrchestrator {
 	return &SessionOrchestrator{
@@ -47,6 +54,7 @@ func NewSessionOrchestrator(
 		sessionStore: sessionStore,
 		logStore:     logStore,
 		ca:           ca,
+		dataDir:      dataDir,
 		logger:       logger,
 	}
 }
@@ -73,7 +81,13 @@ func (o *SessionOrchestrator) Start(ctx context.Context, cfg *models.SandboxConf
 		return nil, err
 	}
 
-	// 1. Create microVM
+	// 1. Save current docker context before sandboxd changes it
+	if out, err := exec.CommandContext(ctx, "docker", "context", "show").Output(); err == nil {
+		o.previousContext = strings.TrimSpace(string(out))
+		o.logger.Debug("saved docker context", "context", o.previousContext)
+	}
+
+	// 2. Create microVM
 	o.logger.Info("creating microVM", "session_id", sessionID, "agent", cfg.Agent)
 	vm, err := o.vmClient.CreateVM(ctx, VMCreateRequest{
 		AgentName:    cfg.Agent,
@@ -136,6 +150,15 @@ func (o *SessionOrchestrator) Start(ctx context.Context, cfg *models.SandboxConf
 	containerMgr := NewContainerManager(vm.SocketPath, o.logger)
 	o.container = containerMgr
 
+	// Create persistent state directory keyed by config name
+	stateDir := filepath.Join(o.dataDir, "state", cfg.Name)
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		o.logger.Warn("failed to create state directory", "path", stateDir, "error", err)
+		stateDir = "" // fall back to no persistence
+	} else {
+		o.logger.Info("persistent state directory", "path", stateDir)
+	}
+
 	containerCfg := ContainerConfig{
 		BaseImage:    cfg.BaseImage,
 		WorkspaceDir: cfg.WorkspaceDir,
@@ -145,6 +168,7 @@ func (o *SessionOrchestrator) Start(ctx context.Context, cfg *models.SandboxConf
 		CACertPEM:    o.ca.CertPEM,
 		Tools:        cfg.Tools,
 		SessionID:    sessionID,
+		StateDir:     stateDir,
 	}
 
 	if err := containerMgr.Start(ctx, containerCfg); err != nil {
@@ -192,6 +216,15 @@ func (o *SessionOrchestrator) Stop(ctx context.Context, force bool) error {
 		if o.vmName != "" {
 			if err := o.vmClient.DestroyVM(ctx, o.vmName); err != nil {
 				o.logger.Error("failed to destroy VM", "error", err)
+			}
+		}
+
+		// Restore docker context
+		if o.previousContext != "" {
+			if err := exec.CommandContext(ctx, "docker", "context", "use", o.previousContext).Run(); err != nil {
+				o.logger.Error("failed to restore docker context", "error", err, "context", o.previousContext)
+			} else {
+				o.logger.Debug("restored docker context", "context", o.previousContext)
 			}
 		}
 
