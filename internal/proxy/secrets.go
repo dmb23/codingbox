@@ -10,7 +10,9 @@ import (
 )
 
 // ReplaceSecretsInRequest replaces placeholders with real values in the outbound request.
-func ReplaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) *http.Request {
+// Returns the modified request and whether any replacement occurred.
+func ReplaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) (*http.Request, bool) {
+	replaced := false
 	for _, s := range secrets {
 		for _, loc := range s.ReplaceIn {
 			switch loc {
@@ -19,6 +21,7 @@ func ReplaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) 
 					for i, v := range vals {
 						if strings.Contains(v, s.Placeholder) {
 							req.Header[key][i] = strings.ReplaceAll(v, s.Placeholder, s.Value)
+							replaced = true
 						}
 					}
 				}
@@ -29,6 +32,7 @@ func ReplaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) 
 						body = bytes.ReplaceAll(body, []byte(s.Placeholder), []byte(s.Value))
 						req.Body = io.NopCloser(bytes.NewReader(body))
 						req.ContentLength = int64(len(body))
+						replaced = true
 					} else if err == nil {
 						req.Body = io.NopCloser(bytes.NewReader(body))
 					}
@@ -37,11 +41,12 @@ func ReplaceSecretsInRequest(req *http.Request, secrets []models.SecretMapping) 
 				q := req.URL.RawQuery
 				if strings.Contains(q, s.Placeholder) {
 					req.URL.RawQuery = strings.ReplaceAll(q, s.Placeholder, s.Value)
+					replaced = true
 				}
 			}
 		}
 	}
-	return req
+	return req, replaced
 }
 
 // ReplaceSecretsInResponse replaces real values with placeholders in the inbound response.

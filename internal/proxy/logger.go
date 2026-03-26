@@ -11,19 +11,23 @@ import (
 	"github.com/mischa/codingbox/internal/models"
 )
 
+// requestMeta stores per-request metadata passed from OnRequest to OnResponse.
+type requestMeta struct {
+	startTime        time.Time
+	secretsReplaced  bool
+}
+
 // installHandlers sets up request/response logging and secret injection on the proxy.
 func (p *Proxy) installHandlers() {
-	// Store start times for duration calculation.
-	type reqKey struct{}
-
 	p.goproxy.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		ctx.UserData = time.Now()
+		meta := &requestMeta{startTime: time.Now()}
 
 		// Apply secret replacement on outbound request.
 		if len(p.secrets) > 0 {
-			req = ReplaceSecretsInRequest(req, p.secrets)
+			req, meta.secretsReplaced = ReplaceSecretsInRequest(req, p.secrets)
 		}
 
+		ctx.UserData = meta
 		return req, nil
 	})
 
@@ -32,19 +36,23 @@ func (p *Proxy) installHandlers() {
 			return resp
 		}
 
-		startTime, _ := ctx.UserData.(time.Time)
-		duration := time.Since(startTime).Milliseconds()
+		meta, _ := ctx.UserData.(*requestMeta)
+		if meta == nil {
+			meta = &requestMeta{startTime: time.Now()}
+		}
+		duration := time.Since(meta.startTime).Milliseconds()
 
 		// Capture request info.
 		reqHeaders, _ := json.Marshal(ctx.Req.Header)
 		var reqBody []byte
-		// Request body was already consumed by the time we get here,
-		// so we only log what we can capture.
 
 		// Apply reverse secret replacement on inbound response.
-		secretsReplaced := false
 		if len(p.secrets) > 0 {
-			resp, secretsReplaced = ReplaceSecretsInResponse(resp, p.secrets)
+			var respReplaced bool
+			resp, respReplaced = ReplaceSecretsInResponse(resp, p.secrets)
+			if respReplaced {
+				meta.secretsReplaced = true
+			}
 		}
 
 		// Capture response info.
@@ -57,7 +65,7 @@ func (p *Proxy) installHandlers() {
 
 		log := &models.TrafficLog{
 			SandboxID:       p.sandboxID,
-			Timestamp:       startTime,
+			Timestamp:       meta.startTime,
 			Method:          ctx.Req.Method,
 			URL:             ctx.Req.URL.String(),
 			RequestHeaders:  string(reqHeaders),
@@ -65,7 +73,7 @@ func (p *Proxy) installHandlers() {
 			ResponseStatus:  resp.StatusCode,
 			ResponseHeaders: string(respHeaders),
 			ResponseBody:    respBody,
-			SecretsReplaced: secretsReplaced,
+			SecretsReplaced: meta.secretsReplaced,
 			DurationMs:      duration,
 		}
 

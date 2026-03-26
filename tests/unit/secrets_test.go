@@ -26,7 +26,7 @@ func TestReplaceSecretsInRequest_HeadersOnly(t *testing.T) {
 		{Placeholder: "__API_KEY__", Value: "real-secret-123", ReplaceIn: []string{models.ReplaceHeaders}},
 	}
 
-	result := proxy.ReplaceSecretsInRequest(req, secrets)
+	result, _ := proxy.ReplaceSecretsInRequest(req, secrets)
 
 	// Header should be replaced.
 	if got := result.Header.Get("Authorization"); got != "Bearer real-secret-123" {
@@ -54,7 +54,7 @@ func TestReplaceSecretsInRequest_BodyOnly(t *testing.T) {
 		{Placeholder: "__TOKEN__", Value: "secret-token-456", ReplaceIn: []string{models.ReplaceBody}},
 	}
 
-	result := proxy.ReplaceSecretsInRequest(req, secrets)
+	result, _ := proxy.ReplaceSecretsInRequest(req, secrets)
 
 	// Header should NOT be replaced.
 	if got := result.Header.Get("Authorization"); got != "Bearer __TOKEN__" {
@@ -84,7 +84,7 @@ func TestReplaceSecretsInRequest_QueryOnly(t *testing.T) {
 		{Placeholder: "__KEY__", Value: "real-key-789", ReplaceIn: []string{models.ReplaceQuery}},
 	}
 
-	result := proxy.ReplaceSecretsInRequest(req, secrets)
+	result, _ := proxy.ReplaceSecretsInRequest(req, secrets)
 
 	// Query should be replaced.
 	if got := result.URL.RawQuery; got != "api_key=real-key-789&format=json" {
@@ -111,7 +111,7 @@ func TestReplaceSecretsInRequest_AllLocations(t *testing.T) {
 		{Placeholder: "__SECRET__", Value: "the-real-secret", ReplaceIn: []string{models.ReplaceHeaders, models.ReplaceBody, models.ReplaceQuery}},
 	}
 
-	result := proxy.ReplaceSecretsInRequest(req, secrets)
+	result, _ := proxy.ReplaceSecretsInRequest(req, secrets)
 
 	if got := result.Header.Get("Authorization"); got != "Bearer the-real-secret" {
 		t.Errorf("Authorization = %q, want 'Bearer the-real-secret'", got)
@@ -142,8 +142,11 @@ func TestReplaceSecretsInRequest_MultipleSecrets(t *testing.T) {
 		{Placeholder: "__TOKEN_B__", Value: "secret-b", ReplaceIn: []string{models.ReplaceHeaders}},
 	}
 
-	result := proxy.ReplaceSecretsInRequest(req, secrets)
+	result, replaced := proxy.ReplaceSecretsInRequest(req, secrets)
 
+	if !replaced {
+		t.Error("expected replaced=true")
+	}
 	if got := result.Header.Get("Authorization"); got != "Bearer secret-a" {
 		t.Errorf("Authorization = %q, want 'Bearer secret-a'", got)
 	}
@@ -166,8 +169,11 @@ func TestReplaceSecretsInRequest_NoMatchNoChange(t *testing.T) {
 		{Placeholder: "__NONEXISTENT__", Value: "secret", ReplaceIn: []string{models.ReplaceHeaders, models.ReplaceBody, models.ReplaceQuery}},
 	}
 
-	result := proxy.ReplaceSecretsInRequest(req, secrets)
+	result, replaced := proxy.ReplaceSecretsInRequest(req, secrets)
 
+	if replaced {
+		t.Error("expected replaced=false when no match")
+	}
 	if got := result.Header.Get("Accept"); got != "application/json" {
 		t.Errorf("Accept header changed unexpectedly: %q", got)
 	}
@@ -195,8 +201,11 @@ func TestReplaceSecretsInRequest_NilBody(t *testing.T) {
 	}
 
 	// Should not panic on nil body.
-	result := proxy.ReplaceSecretsInRequest(req, secrets)
+	result, replaced := proxy.ReplaceSecretsInRequest(req, secrets)
 
+	if !replaced {
+		t.Error("expected replaced=true for header replacement")
+	}
 	if got := result.Header.Get("Authorization"); got != "Bearer real-key" {
 		t.Errorf("Authorization = %q, want 'Bearer real-key'", got)
 	}

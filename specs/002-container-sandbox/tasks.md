@@ -99,7 +99,7 @@
 - [x] T030 [US3] Implement response reverse-replacement in `internal/proxy/secrets.go`: scan response headers and body for real secret values, replace with corresponding placeholders based on `replace_in` config
 - [x] T031 [US2] Integrate secret handlers into proxy pipeline in `internal/proxy/proxy.go`: add request handler that calls secret replacement before forwarding, add response handler that calls reverse-replacement before returning to container; set `secrets_replaced` flag in TrafficLog
 - [x] T032 [P] [US3] Write unit test in `tests/unit/secrets_test.go`: verify replacement in headers only, body only, query only, all locations, no false positives when placeholder appears in non-configured location, reverse replacement in responses
-- [ ] T033 [US3] Verify US3 end-to-end: create config with `secrets: [{placeholder: "__TEST_KEY__", value: "real-secret-123", replace_in: ["headers"]}]`, run sandbox, inside run `curl -H "Authorization: Bearer __TEST_KEY__" https://httpbin.org/headers`, exit, run `codingbox logs --body`, confirm the logged request shows `Authorization: Bearer real-secret-123` (real value in outbound), confirm the container never had access to `real-secret-123`
+- [x] T033 [US3] Verify US3 end-to-end: create config with `secrets: [{placeholder: "__TEST_KEY__", value: "real-secret-123", replace_in: ["headers"]}]`, run sandbox, inside run `curl -H "Authorization: Bearer __TEST_KEY__" https://httpbin.org/headers`, exit, run `codingbox logs --body`, confirm the logged request shows `Authorization: Bearer real-secret-123` (real value in outbound), confirm the container never had access to `real-secret-123`
 
 **Checkpoint**: Secret injection works — agents use placeholders, proxy handles real credentials transparently
 
@@ -115,7 +115,7 @@
 
 - [x] T034 [US4] Implement mount validation in `internal/config/config.go`: verify source paths exist, target paths are absolute, mode is `ro` or `rw`; return clear error for non-existent source directories
 - [x] T035 [US4] Apply additional mounts to container creation in `internal/sandbox/sandbox.go`: iterate MountConfig list, add each as a Docker bind mount with `ReadOnly` set based on mode; append to existing workdir mount
-- [ ] T036 [US4] Verify US4 end-to-end: create a temp directory with a test file, configure it as read-only mount in config, run sandbox, verify file is readable inside container (`cat /mnt/test/file.txt`), verify write is rejected (`touch /mnt/test/new.txt` fails), exit; repeat with read-write mount and verify write succeeds and is visible on host
+- [x] T036 [US4] Verify US4 end-to-end: create a temp directory with a test file, configure it as read-only mount in config, run sandbox, verify file is readable inside container (`cat /mnt/test/file.txt`), verify write is rejected (`touch /mnt/test/new.txt` fails), exit; repeat with read-write mount and verify write succeeds and is visible on host
 
 **Checkpoint**: Additional mounts work with correct access control
 
@@ -131,7 +131,7 @@
 
 - [x] T037 [US5] Implement image validation and pull logic in `internal/sandbox/sandbox.go`: check if image exists locally, if not attempt `docker pull`, report progress, return clear error for invalid/missing images with actionable message
 - [x] T038 [US5] Implement `codingbox init` command in `internal/cli/init.go`: generate default `codingbox.yaml` with commented examples per contracts/cli-commands.md, support `--image` pre-fill and `--force` overwrite
-- [ ] T039 [US5] Verify US5 end-to-end: create a minimal Dockerfile (`FROM ubuntu:22.04\nRUN apt-get update && apt-get install -y jq`), build it (`docker build -t test-sandbox .`), run `codingbox run --image test-sandbox`, verify `jq --version` works inside; also test with invalid image name and confirm clear error message
+- [x] T039 [US5] Verify US5 end-to-end: create a minimal Dockerfile (`FROM ubuntu:22.04\nRUN apt-get update && apt-get install -y jq`), build it (`docker build -t test-sandbox .`), run `codingbox run --image test-sandbox`, verify `jq --version` works inside; also test with invalid image name and confirm clear error message
 
 **Checkpoint**: Any valid OCI image works as sandbox environment
 
@@ -144,7 +144,7 @@
 - [x] T040 [P] Improve error messages across all commands: Docker daemon not running, port already in use, permission denied on mount, image not found — each with actionable guidance per FR-013
 - [x] T041 [P] Harden cleanup in `internal/sandbox/sandbox.go`: ensure cleanup runs even on panic (defer), handle partial state (network created but container failed), add timeout to cleanup operations (5s per SC-006)
 - [x] T042 [P] Add `--proxy-port` CLI flag override to `codingbox run` per contracts/cli-commands.md
-- [ ] T043 Run full quickstart.md validation: follow every step in `specs/002-container-sandbox/quickstart.md` from scratch, verify each command works as documented
+- [x] T043 Run full quickstart.md validation: follow every step in `specs/002-container-sandbox/quickstart.md` from scratch, verify each command works as documented
 
 ---
 
