@@ -23,8 +23,9 @@ func init() {
 	runCmd.Flags().StringP("image", "i", "", "OCI image to use (overrides config)")
 	runCmd.Flags().StringP("workdir", "w", "", "Working directory to mount (overrides config)")
 	runCmd.Flags().StringArrayP("mount", "m", nil, "Additional mount source:target[:ro|rw] (repeatable)")
-	runCmd.Flags().StringArrayP("secret", "s", nil, "Secret placeholder=value[:locations] (repeatable)")
+	runCmd.Flags().StringArrayP("env-secret", "e", nil, "Env secret ENV_NAME[:locations] (repeatable)")
 	runCmd.Flags().Int("proxy-port", 0, "Port for MITM proxy (0=auto)")
+	runCmd.Flags().Bool("no-auto-mounts", false, "Disable automatic config directory mounts")
 
 	rootCmd.AddCommand(runCmd)
 }
@@ -34,7 +35,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	image, _ := cmd.Flags().GetString("image")
 	workdir, _ := cmd.Flags().GetString("workdir")
 	mountFlags, _ := cmd.Flags().GetStringArray("mount")
-	secretFlags, _ := cmd.Flags().GetStringArray("secret")
+	envSecretFlags, _ := cmd.Flags().GetStringArray("env-secret")
 	proxyPort, _ := cmd.Flags().GetInt("proxy-port")
 
 	// Load config file.
@@ -45,9 +46,26 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// Merge CLI flag overrides.
-	if err := config.MergeFlags(cfg, image, workdir, mountFlags, secretFlags, proxyPort); err != nil {
+	if err := config.MergeFlags(cfg, image, workdir, mountFlags, envSecretFlags, proxyPort); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Resolve default image if none configured.
+	config.ResolveDefaultImage(cfg)
+
+	// Resolve env-based secrets (reads from host env, generates placeholders).
+	if err := config.ResolveEnvSecrets(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Apply auto-mounts unless disabled.
+	noAutoMounts, _ := cmd.Flags().GetBool("no-auto-mounts")
+	if !noAutoMounts {
+		cfg.NoAutoMounts = false
+	} else {
+		cfg.NoAutoMounts = true
 	}
 
 	// Validate.

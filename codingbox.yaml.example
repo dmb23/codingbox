@@ -17,15 +17,14 @@ image: "ubuntu:22.04"
 #     target: "/output"
 #     mode: "rw"
 
-# Secret mappings (placeholder → real value)
-# The proxy replaces placeholders in outbound requests with real values.
-# Real values never enter the sandbox.
+# Secrets: specify env var names. Real values are read from the host
+# environment automatically. Inside the sandbox, env vars are set to
+# auto-generated placeholders. The proxy replaces placeholders with
+# real values in outbound requests.
 # secrets:
-#   - placeholder: "__GITHUB_TOKEN__"
-#     value: "ghp_xxxxxxxxxxxx"
+#   - env: "ANTHROPIC_API_KEY"
 #     replace_in: ["headers"]
-#   - placeholder: "__ANTHROPIC_API_KEY__"
-#     value: "sk-ant-xxxxxxxxxxxx"
+#   - env: "GITHUB_TOKEN"
 #     replace_in: ["headers", "body"]
 
 # Port for the MITM proxy (0 = auto-assign)

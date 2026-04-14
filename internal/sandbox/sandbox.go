@@ -18,6 +18,7 @@ import (
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 
+	"github.com/mischa/codingbox/internal/config"
 	"github.com/mischa/codingbox/internal/models"
 	"github.com/mischa/codingbox/internal/proxy"
 	"github.com/mischa/codingbox/internal/store"
@@ -130,6 +131,27 @@ func (m *Manager) Start(ctx context.Context) error {
 		Target:   "/usr/local/share/ca-certificates/codingbox-ca.crt",
 		ReadOnly: true,
 	})
+
+	// Auto-mounts: add config directories from host (same path inside container).
+	if !m.sb.Config.NoAutoMounts {
+		explicitTargets := make(map[string]bool)
+		for _, mc := range m.sb.Config.Mounts {
+			explicitTargets[mc.Target] = true
+		}
+		autoMounts := config.ResolveAutoMounts(os.Getenv("HOME"))
+		for _, am := range autoMounts {
+			if explicitTargets[am.Target] {
+				continue // explicit mount takes precedence
+			}
+			mounts = append(mounts, mount.Mount{
+				Type:     mount.TypeBind,
+				Source:   am.Source,
+				Target:   am.Target,
+				ReadOnly: am.Mode == "ro",
+			})
+		}
+	}
+
 	for _, mc := range m.sb.Config.Mounts {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
@@ -276,6 +298,21 @@ func (m *Manager) buildEnv() []string {
 			"NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/codingbox-ca.crt",
 		)
 	}
+
+	// Inject env-based secrets as environment variables (placeholder values).
+	for _, s := range m.sb.Config.Secrets {
+		if s.Env != "" {
+			env = append(env, fmt.Sprintf("%s=%s", s.Env, s.Placeholder))
+		}
+	}
+
+	// Pass host UID/GID/HOME for entrypoint user matching.
+	env = append(env,
+		fmt.Sprintf("CODINGBOX_UID=%d", os.Getuid()),
+		fmt.Sprintf("CODINGBOX_GID=%d", os.Getgid()),
+		fmt.Sprintf("CODINGBOX_HOME=%s", os.Getenv("HOME")),
+	)
+
 	return env
 }
 

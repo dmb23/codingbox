@@ -17,6 +17,7 @@ var initCmd = &cobra.Command{
 
 func init() {
 	initCmd.Flags().String("image", "", "Pre-fill the image field")
+	initCmd.Flags().StringArray("env-secret", nil, "Pre-fill env secret entries (repeatable)")
 	initCmd.Flags().Bool("force", false, "Overwrite existing config file")
 
 	rootCmd.AddCommand(initCmd)
@@ -24,6 +25,7 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	image, _ := cmd.Flags().GetString("image")
+	envSecrets, _ := cmd.Flags().GetStringArray("env-secret")
 	force, _ := cmd.Flags().GetBool("force")
 
 	cfgPath := filepath.Join(".", "codingbox.yaml")
@@ -58,17 +60,23 @@ image: %s
 #     target: "/output"
 #     mode: "rw"
 
-# Secret placeholder-to-value mappings
-# The proxy replaces placeholders with real values in outbound requests
-# and strips real values from inbound responses
+# Secrets: reads value from host environment automatically
+# Inside the sandbox, env vars are set to auto-generated placeholders.
+# The proxy replaces placeholders with real values in outbound requests.
 # secrets:
-#   - placeholder: "__GITHUB_TOKEN__"
-#     value: "ghp_xxxxxxxxxxxx"
+#   - env: "ANTHROPIC_API_KEY"
 #     replace_in: ["headers"]
-#   - placeholder: "__ANTHROPIC_API_KEY__"
-#     value: "sk-ant-xxxxxxxxxxxx"
+#   - env: "GITHUB_TOKEN"
 #     replace_in: ["headers", "body"]
 `, imageVal)
+
+	// Append env secret entries if provided.
+	if len(envSecrets) > 0 {
+		content += "\nsecrets:\n"
+		for _, es := range envSecrets {
+			content += fmt.Sprintf("  - env: %q\n    replace_in: [\"headers\", \"body\", \"query\"]\n", es)
+		}
+	}
 
 	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("writing config file: %w", err)

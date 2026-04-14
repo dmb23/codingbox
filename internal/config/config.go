@@ -10,7 +10,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Load reads the configuration file and returns a SandboxConfig with defaults applied.
+// Load reads configuration using this precedence:
+// 1. Explicit --config path
+// 2. Local ./codingbox.yaml
+// 3. Central per-directory config (~/.codingbox/directories.yaml)
+// 4. Empty config (relies on CLI flags)
 func Load(configPath string) (*models.SandboxConfig, error) {
 	v := viper.New()
 
@@ -18,19 +22,33 @@ func Load(configPath string) (*models.SandboxConfig, error) {
 	v.SetDefault("proxy_port", 0)
 
 	explicit := configPath != ""
-	if !explicit {
-		configPath = filepath.Join(".", "codingbox.yaml")
-	}
-
-	if _, err := os.Stat(configPath); err == nil {
+	if explicit {
+		// Explicit config path — must exist.
+		if _, err := os.Stat(configPath); err != nil {
+			return nil, fmt.Errorf("config file %q not found", configPath)
+		}
 		v.SetConfigFile(configPath)
 		if err := v.ReadInConfig(); err != nil {
 			return nil, fmt.Errorf("reading config %q: %w", configPath, err)
 		}
-	} else if explicit {
-		return nil, fmt.Errorf("config file %q not found", configPath)
+	} else {
+		// Try local codingbox.yaml first.
+		localPath := filepath.Join(".", "codingbox.yaml")
+		if _, err := os.Stat(localPath); err == nil {
+			v.SetConfigFile(localPath)
+			if err := v.ReadInConfig(); err != nil {
+				return nil, fmt.Errorf("reading config %q: %w", localPath, err)
+			}
+		} else {
+			// Fall back to central per-directory config.
+			centralCfg, err := loadFromCentralStore()
+			if err == nil && centralCfg != nil {
+				applyDefaults(centralCfg)
+				return centralCfg, nil
+			}
+			// No config found — return empty config (will rely on CLI flags).
+		}
 	}
-	// If default config doesn't exist, proceed with defaults + CLI flags only.
 
 	var cfg models.SandboxConfig
 	if err := v.Unmarshal(&cfg); err != nil {
@@ -41,10 +59,78 @@ func Load(configPath string) (*models.SandboxConfig, error) {
 	return &cfg, nil
 }
 
+// loadFromCentralStore looks up the current directory in the central config store.
+func loadFromCentralStore() (*models.SandboxConfig, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := CanonicalDir(cwd)
+	if err != nil {
+		return nil, err
+	}
+
+	store := NewDirectoryConfigStore(DefaultStorePath())
+	if err := store.Load(); err != nil {
+		return nil, err
+	}
+
+	cfg, _, ok := store.FindNearest(canonical)
+	if !ok {
+		return nil, nil
+	}
+	return cfg, nil
+}
+
+// ResolveEnvSecrets resolves secrets: reads values from host env,
+// generates placeholders. Must be called before Validate().
+func ResolveEnvSecrets(cfg *models.SandboxConfig) error {
+	seen := make(map[string]bool)
+	for i := range cfg.Secrets {
+		s := &cfg.Secrets[i]
+		if s.Env == "" {
+			return fmt.Errorf("secret at index %d: 'env' is required", i)
+		}
+		if seen[s.Env] {
+			return fmt.Errorf("duplicate env secret %q", s.Env)
+		}
+		seen[s.Env] = true
+
+		// Read value from host env if not explicitly provided.
+		if s.Value == "" {
+			val, ok := os.LookupEnv(s.Env)
+			if !ok {
+				return fmt.Errorf("secret env var %q is not set on the host. Set it or provide an explicit value in the config", s.Env)
+			}
+			s.Value = val
+		}
+
+		// Auto-generate placeholder.
+		s.Placeholder = GeneratePlaceholder(s.Env)
+	}
+	return nil
+}
+
+// ResolveDefaultImage sets the image to the global default or built-in default
+// if no image is configured. Call after Load + MergeFlags, before Validate.
+func ResolveDefaultImage(cfg *models.SandboxConfig) {
+	if cfg.Image != "" {
+		return
+	}
+	// Try global default from central store.
+	store := NewDirectoryConfigStore(DefaultStorePath())
+	if err := store.Load(); err == nil && store.Defaults.DefaultImage != "" {
+		cfg.Image = store.Defaults.DefaultImage
+		return
+	}
+	// Fall back to built-in default.
+	cfg.Image = DefaultSandboxImage
+}
+
 // Validate checks that required fields are present and values are valid.
 func Validate(cfg *models.SandboxConfig) error {
 	if cfg.Image == "" {
-		return fmt.Errorf("image is required (set in config file or use --image flag)")
+		return fmt.Errorf("image is required. Set in config file, use --image flag, or run: codingbox config set --image <image>")
 	}
 
 	// Resolve workdir to absolute path.
@@ -68,11 +154,12 @@ func Validate(cfg *models.SandboxConfig) error {
 	}
 
 	for i := range cfg.Secrets {
-		if cfg.Secrets[i].Placeholder == "" {
-			return fmt.Errorf("secret at index %d: placeholder is required", i)
+		s := &cfg.Secrets[i]
+		if s.Env == "" {
+			return fmt.Errorf("secret at index %d: 'env' is required", i)
 		}
-		if cfg.Secrets[i].Value == "" {
-			return fmt.Errorf("secret %q: value is required", cfg.Secrets[i].Placeholder)
+		if s.Placeholder == "" || s.Value == "" {
+			return fmt.Errorf("secret env %q: not resolved (call ResolveEnvSecrets first)", s.Env)
 		}
 	}
 
@@ -141,26 +228,16 @@ func ParseMountFlag(val string) (models.MountConfig, error) {
 	return m, nil
 }
 
-// ParseSecretFlag parses a --secret flag value in the format "placeholder=value[:locations]".
-func ParseSecretFlag(val string) (models.SecretMapping, error) {
-	eqIdx := strings.Index(val, "=")
-	if eqIdx < 1 {
-		return models.SecretMapping{}, fmt.Errorf("invalid secret format %q, expected placeholder=value[:headers,body,query]", val)
-	}
-	placeholder := val[:eqIdx]
-	rest := val[eqIdx+1:]
-
-	// Check for optional location suffix after the last ':'
+// ParseEnvSecretFlag parses a --env-secret flag value in the format "ENV_NAME[:locations]".
+func ParseEnvSecretFlag(val string) (models.SecretMapping, error) {
 	s := models.SecretMapping{
-		Placeholder: placeholder,
-		ReplaceIn:   []string{models.ReplaceHeaders, models.ReplaceBody, models.ReplaceQuery},
+		ReplaceIn: []string{models.ReplaceHeaders, models.ReplaceBody, models.ReplaceQuery},
 	}
 
-	colonIdx := strings.LastIndex(rest, ":")
+	colonIdx := strings.Index(val, ":")
 	if colonIdx > 0 {
-		possibleLocations := rest[colonIdx+1:]
-		// Heuristic: if it looks like a location list, parse it
-		locs := strings.Split(possibleLocations, ",")
+		s.Env = val[:colonIdx]
+		locs := strings.Split(val[colonIdx+1:], ",")
 		allValid := true
 		for _, l := range locs {
 			l = strings.TrimSpace(l)
@@ -170,20 +247,21 @@ func ParseSecretFlag(val string) (models.SecretMapping, error) {
 			}
 		}
 		if allValid && len(locs) > 0 {
-			s.Value = rest[:colonIdx]
 			s.ReplaceIn = locs
-		} else {
-			s.Value = rest
 		}
 	} else {
-		s.Value = rest
+		s.Env = val
+	}
+
+	if s.Env == "" {
+		return models.SecretMapping{}, fmt.Errorf("invalid env-secret format %q, expected ENV_NAME[:headers,body,query]", val)
 	}
 
 	return s, nil
 }
 
 // MergeFlags applies CLI flag overrides to an existing config.
-func MergeFlags(cfg *models.SandboxConfig, image, workdir string, mountFlags, secretFlags []string, proxyPort int) error {
+func MergeFlags(cfg *models.SandboxConfig, image, workdir string, mountFlags, envSecretFlags []string, proxyPort int) error {
 	if image != "" {
 		cfg.Image = image
 	}
@@ -200,8 +278,8 @@ func MergeFlags(cfg *models.SandboxConfig, image, workdir string, mountFlags, se
 		}
 		cfg.Mounts = append(cfg.Mounts, m)
 	}
-	for _, sf := range secretFlags {
-		s, err := ParseSecretFlag(sf)
+	for _, ef := range envSecretFlags {
+		s, err := ParseEnvSecretFlag(ef)
 		if err != nil {
 			return err
 		}

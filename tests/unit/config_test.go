@@ -20,8 +20,7 @@ mounts:
     target: "/mnt/tmp"
     mode: "ro"
 secrets:
-  - placeholder: "__KEY__"
-    value: "real-value"
+  - env: "MY_KEY"
     replace_in: ["headers"]
 proxy_port: 8080
 `), 0644)
@@ -48,6 +47,9 @@ proxy_port: 8080
 	}
 	if len(cfg.Secrets) != 1 {
 		t.Fatalf("Secrets len = %d, want 1", len(cfg.Secrets))
+	}
+	if cfg.Secrets[0].Env != "MY_KEY" {
+		t.Errorf("Secrets[0].Env = %q, want MY_KEY", cfg.Secrets[0].Env)
 	}
 	if cfg.Secrets[0].ReplaceIn[0] != "headers" {
 		t.Errorf("Secrets[0].ReplaceIn = %v, want [headers]", cfg.Secrets[0].ReplaceIn)
@@ -76,11 +78,8 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	// Loading a nonexistent config should not error (config file is optional).
 	cfg, err := config.Load("/nonexistent/path/codingbox.yaml")
 	if err == nil {
-		// If the file doesn't exist, viper returns an error for explicit paths.
-		// That's expected.
 		_ = cfg
 	}
 }
@@ -124,22 +123,6 @@ func TestParseMountFlag(t *testing.T) {
 		if m.Source != tt.want.Source || m.Target != tt.want.Target || m.Mode != tt.want.Mode {
 			t.Errorf("ParseMountFlag(%q) = %+v, want %+v", tt.input, m, tt.want)
 		}
-	}
-}
-
-func TestParseSecretFlag(t *testing.T) {
-	s, err := config.ParseSecretFlag("__KEY__=secret-val:headers,body")
-	if err != nil {
-		t.Fatalf("ParseSecretFlag: %v", err)
-	}
-	if s.Placeholder != "__KEY__" {
-		t.Errorf("Placeholder = %q, want __KEY__", s.Placeholder)
-	}
-	if s.Value != "secret-val" {
-		t.Errorf("Value = %q, want secret-val", s.Value)
-	}
-	if len(s.ReplaceIn) != 2 || s.ReplaceIn[0] != "headers" || s.ReplaceIn[1] != "body" {
-		t.Errorf("ReplaceIn = %v, want [headers body]", s.ReplaceIn)
 	}
 }
 

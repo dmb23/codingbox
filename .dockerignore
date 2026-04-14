@@ -1,0 +1,12 @@
+.git/
+.claude/
+.specify/
+specs/
+tests/
+session/
+codingbox
+*.exe
+*.test
+*.out
+.DS_Store
+.env*

@@ -28,6 +28,30 @@ codingbox launches OCI containers with your project directory mounted, routes al
 - Non-HTTP traffic is blocked
 - Everything is cleaned up when the session ends
 
+## Default sandbox image
+
+The default image (`codingbox/sandbox:latest`) includes:
+- **Agents**: Claude Code, Mistral Vibe, OpenCode
+- **Editor**: neovim
+- **Languages**: Node.js 22, Python 3.12+ (via uv), Go 1.24
+- **Tools**: git, curl, jq, ripgrep, fd-find, build-essential, zsh, ruff, ty
+
+### Auto-mounted config directories
+
+codingbox automatically mounts these host paths into the container (at the same absolute path) if they exist:
+
+| Host Path | Mode | Purpose |
+|-----------|------|---------|
+| `~/.gitconfig` | read-only | Git identity |
+| `~/.config/git/` | read-only | Git config dir |
+| `~/.claude/` | read-write | Claude Code config + sessions |
+| `~/.claude.json` | read-write | Claude Code global settings |
+| `~/.vibe/` | read-write | Mistral Vibe config |
+| `~/.config/opencode/` | read-write | OpenCode settings |
+| `~/.local/share/opencode/` | read-write | OpenCode data |
+
+Missing paths are silently skipped. Disable with `--no-auto-mounts`.
+
 ## Prerequisites
 
 - Docker installed and running
@@ -67,7 +91,12 @@ codingbox logs
 
 ## Configuration
 
-codingbox uses a YAML config file (default: `./codingbox.yaml`). CLI flags override config values.
+codingbox loads config from (in order of precedence):
+1. `--config` flag (explicit path)
+2. `./codingbox.yaml` (local config file)
+3. `~/.codingbox/directories.yaml` (central per-directory config)
+
+CLI flags override all config sources.
 
 ```yaml
 # codingbox.yaml
@@ -87,13 +116,11 @@ mounts:
     target: "/output"
     mode: "rw"    # read-write
 
-# Secret injection (placeholder -> real value)
+# Secrets: reads value from host environment automatically
 secrets:
-  - placeholder: "__ANTHROPIC_API_KEY__"
-    value: "sk-ant-xxxxxxxxxxxx"
+  - env: "ANTHROPIC_API_KEY"
     replace_in: ["headers"]
-  - placeholder: "__GITHUB_TOKEN__"
-    value: "ghp_xxxxxxxxxxxx"
+  - env: "GITHUB_TOKEN"
     replace_in: ["headers", "body"]
 
 # Proxy port (0 = auto-assign)
@@ -119,7 +146,7 @@ codingbox run --config /path/to/codingbox.yaml
 # Add mounts and secrets via flags
 codingbox run --image ubuntu:22.04 \
   --mount /host/path:/container/path:ro \
-  --secret "__TOKEN__=real-value:headers"
+  --env-secret ANTHROPIC_API_KEY
 ```
 
 | Flag | Short | Description |
@@ -128,7 +155,7 @@ codingbox run --image ubuntu:22.04 \
 | `--image` | `-i` | OCI image (overrides config) |
 | `--workdir` | `-w` | Working directory to mount (overrides config) |
 | `--mount` | `-m` | Additional mount `source:target[:ro\|rw]` (repeatable) |
-| `--secret` | `-s` | Secret `placeholder=value[:headers,body,query]` (repeatable) |
+| `--env-secret` | `-e` | Env secret `ENV_NAME[:headers,body,query]` (repeatable) |
 | `--proxy-port` | | Proxy port, 0 for auto (overrides config) |
 
 ### `codingbox logs`
@@ -175,6 +202,37 @@ codingbox init --image ubuntu:22.04
 codingbox init --force  # overwrite existing
 ```
 
+### `codingbox config`
+
+Manage central per-directory configurations stored at `~/.codingbox/directories.yaml`.
+
+```bash
+# Register a config for the current directory
+codingbox config set --image my-agent:latest --env-secret ANTHROPIC_API_KEY
+
+# List all registered directories
+codingbox config list
+
+# Update an existing entry
+codingbox config set --image new-image:latest
+
+# Remove a registration
+codingbox config remove
+
+# Register for a specific directory
+codingbox config set --dir /path/to/project --image ubuntu:22.04
+```
+
+After registering, `codingbox run` works with zero arguments from that directory (or any subdirectory).
+
+```bash
+# Set a custom global default image
+codingbox config set-default --image my-custom:latest
+
+# Show current default image
+codingbox config show-default
+```
+
 ### `codingbox ca`
 
 Manage the CA certificate used for HTTPS interception.
@@ -186,25 +244,31 @@ codingbox ca regenerate    # generate a new CA cert
 
 ## Secret injection
 
-Secrets are defined as placeholder-to-value mappings. The proxy handles replacement transparently:
+Secrets are injected so agents never see real credentials:
 
-1. **Outbound requests**: placeholders in the configured locations (headers, body, query params) are replaced with real values before forwarding
-2. **Inbound responses**: real values are replaced back with placeholders before reaching the container
-3. **Inside the container**: only placeholders are ever visible -- the real secret never enters the sandbox
+1. **Outbound requests**: placeholders are replaced with real values before forwarding
+2. **Inbound responses**: real values are replaced back with placeholders
+3. **Inside the container**: only placeholders are visible
+
+### Env-based secrets (recommended)
+
+Specify an environment variable name. The real value is read from the host environment automatically -- no secrets in config files.
 
 ```yaml
 secrets:
-  - placeholder: "__ANTHROPIC_API_KEY__"
-    value: "sk-ant-real-key"
-    replace_in: ["headers"]          # only replace in headers
+  - env: "ANTHROPIC_API_KEY"
+    replace_in: ["headers"]
 
-  - placeholder: "__OPENAI_KEY__"
-    value: "sk-real-openai-key"
-    replace_in: ["headers", "body"]  # replace in headers and body
+  - env: "GITHUB_TOKEN"
+    replace_in: ["headers", "body"]
+```
 
-  - placeholder: "__API_TOKEN__"
-    value: "token-123"
-    replace_in: ["headers", "body", "query"]  # replace everywhere (default)
+Inside the sandbox, `$ANTHROPIC_API_KEY` is set to an auto-generated placeholder like `__CODINGBOX_ANTHROPIC_API_KEY_a1b2c3d4__`. When the agent uses this in an HTTP request, the proxy replaces it with the real key.
+
+You can also pass env secrets via CLI:
+
+```bash
+codingbox run --env-secret ANTHROPIC_API_KEY --env-secret GITHUB_TOKEN:headers
 ```
 
 ## Directory mounts
@@ -247,6 +311,7 @@ If the image isn't available locally, codingbox pulls it automatically.
 ## Data storage
 
 - **Traffic logs**: `~/.codingbox/traffic.db` (SQLite)
+- **Central config**: `~/.codingbox/directories.yaml` (per-directory configs)
 - **CA certificate**: `~/.codingbox/ca/codingbox-ca.pem`
 - **CA private key**: `~/.codingbox/ca/codingbox-ca-key.pem`
 
