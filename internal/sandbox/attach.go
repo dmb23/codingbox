@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/moby/moby/client"
 	"golang.org/x/term"
@@ -32,6 +34,9 @@ func AttachInteractive(ctx context.Context, cli *client.Client, containerID stri
 			return err
 		}
 		defer term.Restore(fd, oldState)
+
+		// Forward host terminal resizes to the container TTY.
+		go monitorResize(ctx, cli, containerID, fd)
 	}
 
 	// Copy stdin to container in background.
@@ -43,4 +48,28 @@ func AttachInteractive(ctx context.Context, cli *client.Client, containerID stri
 	// Copy container output to stdout — blocks until container exits.
 	_, err = io.Copy(os.Stdout, resp.Reader)
 	return err
+}
+
+// monitorResize listens for SIGWINCH and resizes the container TTY to match
+// the host terminal. It runs until ctx is cancelled.
+func monitorResize(ctx context.Context, cli *client.Client, containerID string, fd int) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGWINCH)
+	defer signal.Stop(sigCh)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-sigCh:
+			w, h, err := term.GetSize(fd)
+			if err != nil {
+				continue
+			}
+			cli.ContainerResize(ctx, containerID, client.ContainerResizeOptions{
+				Height: uint(h),
+				Width:  uint(w),
+			})
+		}
+	}
 }

@@ -45,7 +45,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 # OCI image to use as the sandbox environment (required)
 image: %s
 
-# Host directory to mount as /workspace in the container (default: current directory)
+# Host directory to mount in the container at the same path as on the host (default: current directory)
 # workdir: "."
 
 # Port for the MITM proxy (0 = auto-assign)

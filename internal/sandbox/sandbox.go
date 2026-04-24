@@ -18,6 +18,8 @@ import (
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 
+	"golang.org/x/term"
+
 	"github.com/mischa/codingbox/internal/config"
 	"github.com/mischa/codingbox/internal/models"
 	"github.com/mischa/codingbox/internal/proxy"
@@ -121,7 +123,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		{
 			Type:   mount.TypeBind,
 			Source: m.sb.Config.Workdir,
-			Target: "/workspace",
+			Target: m.sb.Config.Workdir,
 		},
 	}
 	// Mount CA cert into container for TLS interception.
@@ -178,12 +180,13 @@ func (m *Manager) Start(ctx context.Context) error {
 			AttachStdin:  true,
 			AttachStdout: true,
 			AttachStderr: true,
-			WorkingDir:   "/workspace",
+			WorkingDir:   m.sb.Config.Workdir,
 			Env:          env,
 		},
 		HostConfig: &container.HostConfig{
-			Mounts:     mounts,
-			ExtraHosts: []string{"host.docker.internal:host-gateway"},
+			Mounts:      mounts,
+			ConsoleSize: consoleSize(),
+			ExtraHosts:  []string{"host.docker.internal:host-gateway"},
 		},
 		NetworkingConfig: &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
@@ -324,4 +327,18 @@ func (m *Manager) Sandbox() *models.Sandbox {
 // DockerClient returns the Docker client.
 func (m *Manager) DockerClient() *client.Client {
 	return m.cli
+}
+
+// consoleSize returns the current terminal dimensions as [height, width].
+// Falls back to [0, 0] (Docker default) if the size cannot be determined.
+func consoleSize() [2]uint {
+	fd := int(os.Stdout.Fd())
+	if !term.IsTerminal(fd) {
+		return [2]uint{0, 0}
+	}
+	w, h, err := term.GetSize(fd)
+	if err != nil {
+		return [2]uint{0, 0}
+	}
+	return [2]uint{uint(h), uint(w)}
 }

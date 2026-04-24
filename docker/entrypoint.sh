@@ -30,15 +30,25 @@ export HOME="$CODINGBOX_HOME"
 # Add user to sudoers for convenience (no password).
 echo "$USER_NAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/codingbox 2>/dev/null || true
 
-# Ensure global tool paths are available (uv, go, user local bins).
-export PATH="/usr/local/go/bin:$HOME/go/bin:$HOME/.local/bin:/root/.local/bin:$PATH"
-
 # Copy uv and tools from root install to user if they don't exist yet.
 if [ -d /root/.local/bin ] && [ ! -f "$HOME/.local/bin/uv" ]; then
     mkdir -p "$HOME/.local/bin"
     cp -rn /root/.local/bin/* "$HOME/.local/bin/" 2>/dev/null || true
     chown -R "$CODINGBOX_UID:$CODINGBOX_GID" "$HOME/.local" 2>/dev/null || true
 fi
+
+# Configure npm global prefix to a user-writable directory so npm install -g
+# and npm update work without sudo.
+NPM_GLOBAL="$HOME/.npm-global"
+mkdir -p "$NPM_GLOBAL"
+chown -R "$CODINGBOX_UID:$CODINGBOX_GID" "$NPM_GLOBAL"
+cat > "$HOME/.npmrc" <<EOF
+prefix=$NPM_GLOBAL
+EOF
+chown "$CODINGBOX_UID:$CODINGBOX_GID" "$HOME/.npmrc"
+
+# Ensure global tool paths are available (npm-global, uv, go, user local bins).
+export PATH="$NPM_GLOBAL/bin:/usr/local/go/bin:$HOME/go/bin:$HOME/.local/bin:/root/.local/bin:$PATH"
 
 # Execute the command as the matched user.
 exec gosu "$CODINGBOX_UID:$CODINGBOX_GID" "$@"
