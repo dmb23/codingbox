@@ -4,13 +4,27 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/elazarl/goproxy"
 	"github.com/mischa/codingbox/internal/models"
 	"github.com/mischa/codingbox/internal/store"
 )
+
+// filteredLogger wraps the standard logger and drops benign broken-pipe warnings
+// that goproxy emits when a client closes the connection mid-response.
+type filteredLogger struct{}
+
+func (filteredLogger) Printf(format string, v ...any) {
+	msg := fmt.Sprintf(format, v...)
+	if strings.Contains(msg, "broken pipe") || strings.Contains(msg, "connection reset by peer") {
+		return
+	}
+	log.Printf("%s", msg)
+}
 
 // Proxy wraps goproxy with logging and secret injection.
 type Proxy struct {
@@ -26,6 +40,7 @@ type Proxy struct {
 func New(ca tls.Certificate, st *store.Store, sandboxID string, secrets []models.SecretMapping) (*Proxy, error) {
 	gp := goproxy.NewProxyHttpServer()
 	gp.Verbose = false
+	gp.Logger = filteredLogger{}
 
 	// Parse CA cert for goproxy MITM.
 	x509Cert, err := x509.ParseCertificate(ca.Certificate[0])
